@@ -11,7 +11,9 @@ import androidx.work.*
 import com.ritesh.parser.core.ParsedTransaction
 import com.ritesh.parser.core.bank.*
 import com.ritesh.cashiro.data.database.entity.AccountBalanceEntity
+import com.ritesh.cashiro.data.database.entity.CardEntity
 import com.ritesh.cashiro.data.database.entity.CardType
+import com.ritesh.cashiro.data.database.entity.TransactionEntity
 import com.ritesh.cashiro.data.database.entity.TransactionType
 import com.ritesh.cashiro.data.database.entity.UnrecognizedSmsEntity
 import com.ritesh.cashiro.data.manager.TransactionDeduplication
@@ -19,7 +21,9 @@ import com.ritesh.cashiro.data.mapper.toEntity
 import com.ritesh.cashiro.data.mapper.toEntityType
 import com.ritesh.cashiro.core.TimeConstants
 import com.ritesh.cashiro.data.preferences.UserPreferencesRepository
+import com.ritesh.cashiro.data.database.entity.SubscriptionEntity
 import com.ritesh.cashiro.data.repository.*
+import com.ritesh.cashiro.domain.model.rule.TransactionField
 import com.ritesh.cashiro.domain.model.rule.TransactionRule
 import com.ritesh.cashiro.domain.repository.RuleRepository
 import com.ritesh.cashiro.domain.service.RuleEngine
@@ -32,6 +36,8 @@ import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.toJavaLocalDateTime
 import java.math.BigDecimal
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -66,6 +72,8 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
     private val merchantMappingRepository: MerchantMappingRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val unrecognizedSmsRepository: UnrecognizedSmsRepository,
+    private val subcategoryRepository: SubcategoryRepository,
+    private val categoryRepository: CategoryRepository,
     private val ruleRepository: RuleRepository,
     private val ruleEngine: RuleEngine
 ) : CoroutineWorker(appContext, workerParams) {
@@ -146,6 +154,37 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
      * Now: one call per TransactionType (4 total), zero DB calls per transaction.
      */
     private var ruleCache: Map<TransactionType, List<TransactionRule>> = emptyMap()
+
+    /** All active subscriptions preloaded at scan start — avoids per-transaction DB lookup. */
+    private var subscriptionCache: Map<String, SubscriptionEntity> = emptyMap()
+
+    /** Subcategory name → category name, preloaded at scan start — avoids DB calls on rule apply. */
+    private var subcategoryToCategoryCache: Map<String, String> = emptyMap()
+
+    /**
+     * All existing transaction hashes preloaded at scan start + dynamically updated as new
+     * transactions are inserted. Thread-safe MutableSet backed by ConcurrentHashMap.
+     * Avoids per-transaction DB lookup AND catches same-batch duplicates.
+     */
+    private val existingHashes: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    /** Cards preloaded at scan start — avoids per-transaction card DB lookups. Key: "bankName|cardLast4". */
+    private var cardCache: Map<String, CardEntity> = emptyMap()
+
+    /**
+     * In-memory balance cache keyed by "bankName|accountLast4". Populated lazily on first access
+     * and updated after each insert — eliminates per-transaction getLatestBalance reads.
+     */
+    private val balanceCache = java.util.concurrent.ConcurrentHashMap<String, AccountBalanceEntity?>()
+
+    /**
+     * In-memory UPI dedup cache — stores recently-inserted UPI transactions keyed by reference.
+     * Eliminates findPotentialDuplicates DB query when the duplicate was inserted in the current batch.
+     */
+    private val upiDedupCache = ConcurrentHashMap<String, CopyOnWriteArrayList<TransactionEntity>>()
+
+    private fun cardCacheKey(bankName: String, cardLast4: String) = "$bankName|$cardLast4"
+    private fun balanceCacheKey(bankName: String, accountLast4: String) = "$bankName|$accountLast4"
 
     // ─── Extension: DRYs up repeated timestamp conversions ───────────────────
 
@@ -314,10 +353,34 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
                 ruleCache = TransactionType.entries.associateWith { type ->
                     ruleRepository.getActiveRulesByType(type)
                 }
+                subscriptionCache = subscriptionRepository.getActiveSubscriptions()
+                    .first()
+                    .associateBy { it.merchantName }
+                val allSubcategories = subcategoryRepository.getAllSubcategories().first()
+                val allCategories = categoryRepository.getAllCategories().first()
+                val categoryById = allCategories.associateBy { it.id }
+                subcategoryToCategoryCache = allSubcategories
+                    .filter { it.name.isNotBlank() }
+                    .mapNotNull { subcat ->
+                        categoryById[subcat.categoryId]?.let { cat ->
+                            subcat.name to cat.name
+                        }
+                    }
+                    .toMap()
+                existingHashes.clear()
+                existingHashes.addAll(transactionRepository.getAllTransactionHashes())
+                cardCache = cardRepository.getAllCards().first()
+                    .associateBy { cardCacheKey(it.bankName, it.cardLast4) }
+                balanceCache.clear()
             } finally {
                 Trace.endSection()
             }
-            Log.i(TAG, "Caches: ${merchantMappingCache.size} merchant mappings, ${ruleCache.values.map { it.size }.sum()} rules")
+            Log.i(TAG, "Caches: ${merchantMappingCache.size} merchant mappings, " +
+                "${ruleCache.values.sumOf { it.size }} rules, " +
+                "${subscriptionCache.size} subscriptions, " +
+                "${subcategoryToCategoryCache.size} subcategory→category mappings, " +
+                "${existingHashes.size} existing hashes, " +
+                "${cardCache.size} cards")
 
             // Fast COUNT queries — avoids loading all messages before the pipeline
             val smsCount = countSmsMessages(scanStartTime)
@@ -459,7 +522,7 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
                     }
 
                     val nowMs = System.currentTimeMillis()
-                    if (nowMs - lastReportTime >= 25L || p == 1 || p == stats.total) {
+                    if (nowMs - lastReportTime >= 500L || p == 1 || p == stats.total) {
                         lastReportTime = nowMs
                         progressJob?.cancel()
                         progressJob = launch { reportProgress(stats) }
@@ -640,15 +703,15 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
     ): SaveOutcome = try {
         coroutineScope {
             val entity = parsed.toEntity()
-            val hashDeferred = async { transactionRepository.getTransactionByHash(entity.transactionHash) }
+
+            // O(1) in-memory hash check — previously an async DB query per SMS
+            if (entity.transactionHash in existingHashes) return@coroutineScope SaveOutcome.SKIPPED
 
             val customCategory = merchantMappingCache[entity.merchantName]
             val mapped = if (customCategory != null) entity.copy(category = customCategory) else entity
 
             val activeRules = ruleCache[mapped.transactionType] ?: emptyList()
             val isBlocked = ruleEngine.shouldBlockTransaction(mapped, sms.body, activeRules) != null
-
-            if (hashDeferred.await() != null) return@coroutineScope SaveOutcome.SKIPPED
 
             if (isBlocked) {
                 stats.blocked.incrementAndGet()
@@ -657,17 +720,40 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
 
             val (withRules, ruleApps) = ruleEngine.evaluateRules(mapped, sms.body, activeRules)
 
-            val matchedSub = subscriptionRepository.matchTransactionToSubscription(
-                withRules.merchantName, withRules.amount
-            )
+            // Resolve category from subcategory if subcategory was changed by rules (in-memory cache)
+            var resolvedEntity = withRules
+            ruleApps.asSequence().flatMap { it.fieldsModified.asSequence() }
+                .firstOrNull { it.field == TransactionField.SUBCATEGORY && !it.newValue.isNullOrBlank() }
+                ?.newValue?.let { subName ->
+                    subcategoryToCategoryCache[subName]?.let { categoryName ->
+                        resolvedEntity = resolvedEntity.copy(category = categoryName)
+                    }
+                }
+
+            val matchedSub = subscriptionCache[resolvedEntity.merchantName]?.let { sub ->
+                val tolerance = sub.amount.multiply(BigDecimal("0.05"))
+                val diff = sub.amount.subtract(resolvedEntity.amount).abs()
+                if (diff <= tolerance) sub else null
+            }
             val finalEntity = if (matchedSub != null) {
                 subscriptionRepository.updateNextPaymentDateAfterCharge(
-                    matchedSub.id, withRules.dateTime.toLocalDate()
+                    matchedSub.id, resolvedEntity.dateTime.toLocalDate()
                 )
-                withRules.copy(isRecurring = true)
-            } else withRules
+                resolvedEntity.copy(isRecurring = true)
+            } else resolvedEntity
 
-            val duplicate = transactionRepository.findPotentialDuplicates(finalEntity).firstOrNull()
+            // In-memory UPI dedup cache — avoids DB query when duplicate was inserted in current batch
+            val cachedDup = if (TransactionDeduplication.hasUpiReference(finalEntity)) {
+                val ref = finalEntity.reference
+                if (ref != null) {
+                    upiDedupCache[ref]?.firstOrNull { cached ->
+                        TransactionDeduplication.isSameUpiTransaction(cached, finalEntity)
+                    }
+                } else null
+            } else null
+            val duplicate = cachedDup
+                ?: transactionRepository.findPotentialDuplicates(finalEntity).firstOrNull()
+
             if (duplicate != null) {
                 if (TransactionDeduplication.shouldReplaceWithIncoming(duplicate, finalEntity)) {
                     val replacement = finalEntity.copy(
@@ -687,6 +773,14 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
 
             val rowId = transactionRepository.insertTransaction(finalEntity)
             if (rowId == -1L) return@coroutineScope SaveOutcome.SKIPPED
+
+            // Write-through: update in-memory caches so same-batch lookups hit cache, not DB
+            existingHashes.add(entity.transactionHash)
+            finalEntity.reference?.let { ref ->
+                if (TransactionDeduplication.hasUpiReference(finalEntity)) {
+                    upiDedupCache.computeIfAbsent(ref) { CopyOnWriteArrayList() }.add(finalEntity)
+                }
+            }
 
             saveRuleApplications(rowId, ruleApps)
             balanceUpdates.send(DeferredBalanceUpdate(parsed, finalEntity, rowId))
@@ -727,16 +821,28 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
     ) {
         val accountLast4 = parsed.accountLast4 ?: return
 
+        // In-memory card lookup — avoids DB getCard per transaction
         val card = if (parsed.isFromCard) {
-            (cardRepository.getCard(parsed.bankName, accountLast4)
-                ?: run {
-                    cardRepository.findOrCreateCard(
-                        accountLast4, parsed.bankName,
-                        isCredit = parsed.type.toEntityType() == TransactionType.CREDIT
-                    )
-                    cardRepository.getCard(parsed.bankName, accountLast4)
+            val ck = cardCacheKey(parsed.bankName, accountLast4)
+            val cached = cardCache[ck]
+            if (cached != null) {
+                cached
+            } else {
+                // First time seeing this card — load from DB and cache it
+                val fromDb = cardRepository.getCard(parsed.bankName, accountLast4)
+                    ?: run {
+                        cardRepository.findOrCreateCard(
+                            accountLast4, parsed.bankName,
+                            isCredit = parsed.type.toEntityType() == TransactionType.CREDIT
+                        )
+                        cardRepository.getCard(parsed.bankName, accountLast4)
+                    }
+                if (fromDb != null) {
+                    // Use a mutable copy so we can update in place if needed
+                    cardCache = cardCache + (ck to fromDb)
                 }
-                )?.also { c ->
+                fromDb
+            }?.also { c ->
                 cardRepository.updateCardBalance(
                     cardId  = c.id,
                     balance = parsed.balance,
@@ -756,7 +862,13 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
         val isCreditCard = card?.cardType == CardType.CREDIT ||
                 parsed.type.toEntityType() == TransactionType.CREDIT
 
-        val existing = accountBalanceRepository.getLatestBalance(parsed.bankName, targetAccount)
+        // Lazy in-memory balance cache — first access per account hits DB, subsequent hits cache
+        val bk = balanceCacheKey(parsed.bankName, targetAccount)
+        val existing = balanceCache[bk] ?: run {
+            val fromDb = accountBalanceRepository.getLatestBalance(parsed.bankName, targetAccount)
+            balanceCache[bk] = fromDb
+            fromDb
+        }
 
         // 1. Calculate the new balance
         val newBalance = when {
@@ -796,6 +908,8 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
         )
 
         accountBalanceRepository.insertBalance(balanceEntity)
+        // Update in-memory cache with the new balance so subsequent transactions see it
+        balanceCache[bk] = balanceEntity
 
         val logMsg = if (parsed.creditLimit != null) {
             "Saved balance/limit (${CurrencyFormatter.formatCurrency(parsed.creditLimit!!, parsed.currency)})"

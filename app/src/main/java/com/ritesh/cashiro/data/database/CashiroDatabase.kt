@@ -78,7 +78,7 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
             WebhookCursorEntity::class,
             BankNotificationEntity::class
         ],
-    version = 53,
+    version = 54,
     exportSchema = true,
     autoMigrations =
         [
@@ -104,7 +104,8 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
             AutoMigration(from = 46, to = 47, spec = Migration46To47::class),
             AutoMigration(from = 47, to = 48),
             AutoMigration(from = 51, to = 52),
-            AutoMigration(from = 52, to = 53)
+            AutoMigration(from = 52, to = 53),
+            AutoMigration(from = 53, to = 54)
         ]
 )
 @TypeConverters(Converters::class)

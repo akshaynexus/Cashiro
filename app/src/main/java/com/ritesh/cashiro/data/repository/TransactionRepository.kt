@@ -148,12 +148,13 @@ class TransactionRepository @Inject constructor(private val transactionDao: Tran
     suspend fun getTransactionByHash(transactionHash: String): TransactionEntity? =
             transactionDao.getTransactionByHash(transactionHash)
 
+    suspend fun getAllTransactionHashes(): List<String> =
+            transactionDao.getAllTransactionHashes()
+
     suspend fun findStatementMergeCandidate(transaction: TransactionEntity): TransactionEntity? {
         val reference = transaction.reference?.takeIf { it.isNotBlank() } ?: return null
-        return transactionDao.getTransactionsByReference(reference)
-            .firstOrNull { candidate ->
-                com.ritesh.cashiro.data.statement.StatementTransactionEnricher.isStatementMatch(candidate, transaction)
-            }
+        val candidate = transactionDao.getTransactionByReference(reference) ?: return null
+        return if (com.ritesh.cashiro.data.statement.StatementTransactionEnricher.isStatementMatch(candidate, transaction)) candidate else null
     }
 
     suspend fun findGPayDuplicateIdsForCleanup(): List<Long> {
@@ -406,8 +407,7 @@ class TransactionRepository @Inject constructor(private val transactionDao: Tran
         startDate: LocalDateTime,
         endDate: LocalDateTime
     ): List<TransactionEntity> {
-        return transactionDao.findPotentialDuplicates(startDate, endDate)
-            .filter { it.amount.compareTo(amount) == 0 }
+        return transactionDao.findPotentialDuplicates(amount, startDate, endDate)
     }
 
     suspend fun findPotentialDuplicates(transaction: TransactionEntity): List<TransactionEntity> {

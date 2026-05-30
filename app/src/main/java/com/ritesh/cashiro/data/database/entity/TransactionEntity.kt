@@ -7,7 +7,14 @@ import androidx.room.PrimaryKey
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
-@Entity(tableName = "transactions", indices = [Index(value = ["transaction_hash"], unique = true)])
+@Entity(tableName = "transactions", indices = [
+    Index(value = ["transaction_hash"], unique = true),
+    Index(value = ["is_deleted"]),
+    Index(value = ["date_time"]),
+    Index(value = ["amount"]),
+    Index(value = ["reference"]),
+    Index(value = ["merchant_name"])
+])
 data class TransactionEntity(
         @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "id") val id: Long = 0,
         @ColumnInfo(name = "amount") val amount: BigDecimal,

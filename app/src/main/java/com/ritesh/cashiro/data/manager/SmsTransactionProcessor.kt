@@ -12,9 +12,12 @@ import com.ritesh.cashiro.data.mapper.toEntity
 import com.ritesh.cashiro.data.mapper.toEntityType
 import com.ritesh.cashiro.data.repository.AccountBalanceRepository
 import com.ritesh.cashiro.data.repository.CardRepository
+import com.ritesh.cashiro.data.repository.CategoryRepository
 import com.ritesh.cashiro.data.repository.MerchantMappingRepository
+import com.ritesh.cashiro.data.repository.SubcategoryRepository
 import com.ritesh.cashiro.data.repository.SubscriptionRepository
 import com.ritesh.cashiro.data.repository.TransactionRepository
+import com.ritesh.cashiro.domain.model.rule.TransactionField
 import com.ritesh.cashiro.domain.repository.RuleRepository
 import com.ritesh.cashiro.domain.service.RuleEngine
 import java.math.BigDecimal
@@ -37,6 +40,8 @@ class SmsTransactionProcessor @Inject constructor(
     private val cardRepository: CardRepository,
     private val merchantMappingRepository: MerchantMappingRepository,
     private val subscriptionRepository: SubscriptionRepository,
+    private val subcategoryRepository: SubcategoryRepository,
+    private val categoryRepository: CategoryRepository,
     private val ruleRepository: RuleRepository,
     private val ruleEngine: RuleEngine
 ) {
@@ -152,21 +157,34 @@ class SmsTransactionProcessor @Inject constructor(
                 Log.d(TAG, "Applied ${ruleApplications.size} rules to transaction")
             }
 
+            // Resolve category from subcategory if subcategory was changed by rules
+            var resolvedEntity = entityWithRules
+            ruleApplications.asSequence().flatMap { it.fieldsModified.asSequence() }
+                .firstOrNull { it.field == TransactionField.SUBCATEGORY && !it.newValue.isNullOrBlank() }
+                ?.newValue?.let { subName ->
+                    subcategoryRepository.getSubcategoryByName(subName)?.let { sub ->
+                        categoryRepository.getCategoryById(sub.categoryId)?.let { cat ->
+                            resolvedEntity = resolvedEntity.copy(category = cat.name)
+                        }
+                    }
+                }
+
+            // Update references from entityWithRules to resolvedEntity
             // Check if this transaction matches an active subscription
             val matchedSubscription = subscriptionRepository.matchTransactionToSubscription(
-                entityWithRules.merchantName,
-                entityWithRules.amount
+                resolvedEntity.merchantName,
+                resolvedEntity.amount
             )
 
             val finalEntity = if (matchedSubscription != null) {
                 Log.d(TAG, "Transaction matched to active subscription: ${matchedSubscription.merchantName}")
                 subscriptionRepository.updateNextPaymentDateAfterCharge(
                     matchedSubscription.id,
-                    entityWithRules.dateTime.toLocalDate()
+                    resolvedEntity.dateTime.toLocalDate()
                 )
-                entityWithRules.copy(isRecurring = true)
+                resolvedEntity.copy(isRecurring = true)
             } else {
-                entityWithRules
+                resolvedEntity
             }
 
             val rowId = transactionRepository.insertTransaction(finalEntity)

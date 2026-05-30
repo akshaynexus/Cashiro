@@ -236,8 +236,15 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE transaction_hash = :transactionHash LIMIT 1")
     suspend fun getTransactionByHash(transactionHash: String): TransactionEntity?
 
+    /** Preload all transaction hashes for O(1) in-memory dedup during bulk scan. */
+    @Query("SELECT transaction_hash FROM transactions")
+    suspend fun getAllTransactionHashes(): List<String>
+
     @Query("SELECT * FROM transactions WHERE reference = :reference AND is_deleted = 0")
     suspend fun getTransactionsByReference(reference: String): List<TransactionEntity>
+
+    @Query("SELECT * FROM transactions WHERE reference = :reference AND is_deleted = 0 LIMIT 1")
+    suspend fun getTransactionByReference(reference: String): TransactionEntity?
 
     @Query(
             """
@@ -318,10 +325,12 @@ interface TransactionDao {
         """
         SELECT * FROM transactions
         WHERE is_deleted = 0
+        AND amount = :amount
         AND date_time BETWEEN :startDate AND :endDate
     """
     )
     suspend fun findPotentialDuplicates(
+        amount: BigDecimal,
         startDate: LocalDateTime,
         endDate: LocalDateTime
     ): List<TransactionEntity>

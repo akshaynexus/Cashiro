@@ -35,6 +35,7 @@ import com.ritesh.cashiro.presentation.ui.components.CustomTitleTopAppBar
 import com.ritesh.cashiro.presentation.ui.components.ListItem
 import com.ritesh.cashiro.presentation.ui.components.ListItemPosition
 import com.ritesh.cashiro.presentation.ui.components.toShape
+import com.ritesh.cashiro.presentation.ui.features.settings.dataprivacy.PdfImportSheet
 import com.ritesh.cashiro.presentation.ui.theme.*
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -129,6 +130,9 @@ fun ImportStatementScreen(
                         is ImportStatementUiState.Loading -> {
                             LoadingContent(progress = state.progress)
                         }
+                        is ImportStatementUiState.Review -> {
+                            // Sheet is shown outside the AnimatedContent
+                        }
                         is ImportStatementUiState.Success -> {
                             SuccessContent(
                                 result = state.result,
@@ -153,13 +157,25 @@ fun ImportStatementScreen(
             }
         }
     }
+
+    // Review bottom sheet
+    val reviewState = uiState as? ImportStatementUiState.Review
+    if (reviewState != null) {
+        PdfImportSheet(
+            analysisResult = reviewState.analysisResult,
+            onConfirm = { transactionDecisions, accountDecisions ->
+                viewModel.confirmPdfImport(accountDecisions, transactionDecisions)
+            },
+            onDismiss = { viewModel.resetState() }
+        )
+    }
+
 }
 
 @Composable
 private fun IdleContent(onSelectPdf: () -> Unit) {
     Spacer(modifier = Modifier.height(Spacing.lg))
     
-    // Using Cashiro's typical list item design for a more premium look
     ListItem(
         headline = { Text("Google Pay & PhonePe", fontWeight = FontWeight.Bold) },
         supporting = { Text("Import transactions directly from your generated PDF statements. Duplicates are auto-detected and skipped.") },
@@ -205,7 +221,6 @@ private fun IdleContent(onSelectPdf: () -> Unit) {
 private fun LoadingContent(progress: Float) {
     Spacer(modifier = Modifier.height(Spacing.xl))
 
-    // Animated Realtime Progress
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
         animationSpec = spring(stiffness = Spring.StiffnessLow, dampingRatio = Spring.DampingRatioNoBouncy),
@@ -256,7 +271,6 @@ private fun SuccessContent(
 ) {
     Spacer(modifier = Modifier.height(Spacing.lg))
     
-    // Overview Item
     ListItem(
         headline = { Text("Import Complete", fontWeight = FontWeight.Bold) },
         supporting = { Text("Successfully processed PDF statement") },
