@@ -377,6 +377,8 @@
     <string name="merge_selected_accounts">Merge Selected Accounts</string>
     <string name="main_account_info">A Main account is the default account selected for your manual transaction entries.</string>
     <string name="add_your_main_account">Add Your Main Account</string>
+    <string name="select_main_account_title">Choose your main account</string>
+    <string name="select_main_account_desc">Select which account should be used as the main account for new transactions.</string>
     <string name="enter_primary_account_details">Enter your primary account details to get started.</string>
     <string name="bank_name_hint">Bank Name (e.g., HDFC, SBI)</string>
     <string name="last_4_digits_hint">Last 4 Digits of Account</string>
