@@ -788,103 +788,105 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(1.5.dp)
                 ) {
-                    ListItem(
-                        headline = {
-                            Text(
-                                text = stringResource(R.string.ai_chat_assistant),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium
-                            )
-                        },
-                        supporting = {
-                            Text(
-                                text = when (downloadState) {
-                                    DownloadState.NOT_DOWNLOADED -> stringResource(R.string.ai_chat_subtitle_not_downloaded, Constants.ModelDownload.MODEL_SIZE_MB)
-                                    DownloadState.DOWNLOADING -> stringResource(R.string.ai_chat_subtitle_downloading, downloadProgress)
-                                    DownloadState.PAUSED -> stringResource(R.string.ai_chat_subtitle_paused)
-                                    DownloadState.COMPLETED -> stringResource(R.string.ai_chat_subtitle_completed)
-                                    DownloadState.FAILED -> stringResource(R.string.ai_chat_subtitle_failed)
-                                    DownloadState.ERROR_INSUFFICIENT_SPACE -> stringResource(R.string.ai_chat_subtitle_insufficient_space)
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (downloadState == DownloadState.FAILED || downloadState == DownloadState.ERROR_INSUFFICIENT_SPACE)
-                                    MaterialTheme.colorScheme.error
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        leading = {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .background(
-                                        color = yellow_light,
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = yellow_dark
+                    if (com.ritesh.cashiro.core.Constants.Device.is64Bit) {
+                        ListItem(
+                            headline = {
+                                Text(
+                                    text = stringResource(R.string.ai_chat_assistant),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium
                                 )
-                            }
-                        },
-                        trailing = {
-                            when (downloadState) {
-                                DownloadState.NOT_DOWNLOADED -> {
+                            },
+                            supporting = {
+                                Text(
+                                    text = when (downloadState) {
+                                        DownloadState.NOT_DOWNLOADED -> stringResource(R.string.ai_chat_subtitle_not_downloaded, Constants.ModelDownload.MODEL_SIZE_MB)
+                                        DownloadState.DOWNLOADING -> stringResource(R.string.ai_chat_subtitle_downloading, downloadProgress)
+                                        DownloadState.PAUSED -> stringResource(R.string.ai_chat_subtitle_paused)
+                                        DownloadState.COMPLETED -> stringResource(R.string.ai_chat_subtitle_completed)
+                                        DownloadState.FAILED -> stringResource(R.string.ai_chat_subtitle_failed)
+                                        DownloadState.ERROR_INSUFFICIENT_SPACE -> stringResource(R.string.ai_chat_subtitle_insufficient_space)
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (downloadState == DownloadState.FAILED || downloadState == DownloadState.ERROR_INSUFFICIENT_SPACE)
+                                        MaterialTheme.colorScheme.error
+                                    else
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            leading = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .background(
+                                            color = yellow_light,
+                                            shape = CircleShape
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     Icon(
-                                        Iconax.ImportArrow01,
-                                        contentDescription = stringResource(R.string.download),
-                                        tint = MaterialTheme.colorScheme.primary
+                                        Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = yellow_dark
                                     )
                                 }
-                                DownloadState.DOWNLOADING -> {
-                                    LoadingCircularProgress(
-                                        modifier = Modifier.size(32.dp),
-                                        progress = downloadProgress / 100f
-                                    )
+                            },
+                            trailing = {
+                                when (downloadState) {
+                                    DownloadState.NOT_DOWNLOADED -> {
+                                        Icon(
+                                            Iconax.ImportArrow01,
+                                            contentDescription = stringResource(R.string.download),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    DownloadState.DOWNLOADING -> {
+                                        LoadingCircularProgress(
+                                            modifier = Modifier.size(32.dp),
+                                            progress = downloadProgress / 100f
+                                        )
+                                    }
+                                    DownloadState.PAUSED, DownloadState.FAILED -> {
+                                        Icon(
+                                            Icons.Rounded.Refresh,
+                                            contentDescription = stringResource(R.string.retry),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    DownloadState.COMPLETED -> {
+                                        Icon(
+                                            Iconax.Bag,
+                                            contentDescription = stringResource(R.string.delete),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    DownloadState.ERROR_INSUFFICIENT_SPACE -> {
+                                        Icon(
+                                            Icons.Rounded.Error,
+                                            contentDescription = stringResource(R.string.error),
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
                                 }
-                                DownloadState.PAUSED, DownloadState.FAILED -> {
-                                    Icon(
-                                        Icons.Rounded.Refresh,
-                                        contentDescription = stringResource(R.string.retry),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                            },
+                            onClick = {
+                                when (downloadState) {
+                                    DownloadState.NOT_DOWNLOADED, DownloadState.PAUSED, DownloadState.FAILED -> {
+                                        settingsViewModel.startModelDownload()
+                                    }
+                                    DownloadState.DOWNLOADING -> {
+                                        settingsViewModel.cancelDownload()
+                                    }
+                                    DownloadState.COMPLETED -> {
+                                        showDeleteModelDialog = true
+                                    }
+                                    else -> {}
                                 }
-                                DownloadState.COMPLETED -> {
-                                    Icon(
-                                        Iconax.Bag,
-                                        contentDescription = stringResource(R.string.delete),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                DownloadState.ERROR_INSUFFICIENT_SPACE -> {
-                                    Icon(
-                                        Icons.Rounded.Error,
-                                        contentDescription = stringResource(R.string.error),
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        },
-                        onClick = {
-                            when (downloadState) {
-                                DownloadState.NOT_DOWNLOADED, DownloadState.PAUSED, DownloadState.FAILED -> {
-                                    settingsViewModel.startModelDownload()
-                                }
-                                DownloadState.DOWNLOADING -> {
-                                    settingsViewModel.cancelDownload()
-                                }
-                                DownloadState.COMPLETED -> {
-                                    showDeleteModelDialog = true
-                                }
-                                else -> {}
-                            }
-                        },
-                        shape = ListItemPosition.Top.toShape(),
-                        padding = PaddingValues(0.dp)
-                    )
+                            },
+                            shape = ListItemPosition.Top.toShape(),
+                            padding = PaddingValues(0.dp)
+                        )
+                    }
                     // Notifications
                     ListItem(
                         headline = {
@@ -926,7 +928,7 @@ fun SettingsScreen(
                             )
                         },
                         onClick = { onNavigateToNotifications() },
-                        shape = ListItemPosition.Middle.toShape(),
+                        shape = if (com.ritesh.cashiro.core.Constants.Device.is64Bit) ListItemPosition.Middle.toShape() else ListItemPosition.Top.toShape(),
                         padding = PaddingValues(0.dp)
                     )
                     // SMS

@@ -45,6 +45,9 @@ class LlmRepository @Inject constructor(
         
         // Initialize LLM if needed
         if (!llmService.isInitialized()) {
+            if (!com.ritesh.cashiro.core.Constants.Device.is64Bit) {
+                return Result.failure(Exception("AI features are not supported on 32-bit devices."))
+            }
             val modelFile = modelRepository.getModelFile()
             if (!modelFile.exists()) {
                 return Result.failure(Exception("Model not downloaded"))
@@ -89,6 +92,9 @@ class LlmRepository @Inject constructor(
 
         // Initialize LLM if needed
         if (!llmService.isInitialized()) {
+            if (!com.ritesh.cashiro.core.Constants.Device.is64Bit) {
+                throw Exception("AI features are not supported on 32-bit devices.")
+            }
             val modelFile = modelRepository.getModelFile()
             if (!modelFile.exists()) {
                 throw Exception("Model not downloaded. Please download from Settings.")

@@ -89,4 +89,8 @@ object Constants {
         const val GUIDE_URL = "https://ritesh-kanwar.github.io/cashiro.showcase/guides"
         const val REPORT_BUG_URL = "https://github.com/ritesh-kanwar/Cashiro/issues/new/choose"
     }
+    object Device {
+        val is64Bit = android.os.Build.SUPPORTED_ABIS.firstOrNull()
+            ?.let { it == "arm64-v8a" || it == "x86_64" } == true
+    }
 }

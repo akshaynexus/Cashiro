@@ -1120,19 +1120,21 @@ fun CashiroNavHost(
                                 color = MaterialTheme.colorScheme.surface.copy(0.6f)
                             )
 
-                            DropdownMenuItem(
-                                text = { Text(
-                                    text = askAiLbl,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                ) },
-                                onClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                    dismiss()
-                                    navController.safeNavigate(Chat)
-                                },
-                                leadingIcon = { Icon(Iconax.AiCommentary, contentDescription = null) }
-                            )
+                            if (com.ritesh.cashiro.core.Constants.Device.is64Bit) {
+                                DropdownMenuItem(
+                                    text = { Text(
+                                        text = askAiLbl,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    ) },
+                                    onClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                        dismiss()
+                                        navController.safeNavigate(Chat)
+                                    },
+                                    leadingIcon = { Icon(Iconax.AiCommentary, contentDescription = null) }
+                                )
+                            }
                         } else if (isTransactionsScreen) {
                             DropdownMenuItem(
                                 text = { Text(exportLbl) },
@@ -1161,15 +1163,17 @@ fun CashiroNavHost(
                                 thickness = 1.5.dp,
                                 color = MaterialTheme.colorScheme.surface.copy(0.6f)
                             )
-                            DropdownMenuItem(
-                                text = { Text(askAiLbl) },
-                                onClick = {
-                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                    dismiss()
-                                    navController.safeNavigate(Chat)
-                                },
-                                leadingIcon = { Icon(Iconax.AiCommentary, contentDescription = null) }
-                            )
+                            if (com.ritesh.cashiro.core.Constants.Device.is64Bit) {
+                                DropdownMenuItem(
+                                    text = { Text(askAiLbl) },
+                                    onClick = {
+                                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                        dismiss()
+                                        navController.safeNavigate(Chat)
+                                    },
+                                    leadingIcon = { Icon(Iconax.AiCommentary, contentDescription = null) }
+                                )
+                            }
                         }
                     }
                 )

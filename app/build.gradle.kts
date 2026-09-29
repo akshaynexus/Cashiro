@@ -68,10 +68,6 @@ android {
         create("fdroid") {
             dimension = "version"
             // F-Droid builds will use their own signing
-            // Only include ARM architectures for F-Droid (no x86 emulator support)
-            ndk {
-                abiFilters += setOf("arm64-v8a", "armeabi-v7a")
-            }
         }
         create("standard") {
             dimension = "version"
@@ -94,7 +90,7 @@ android {
             isEnable = !isBundleBuild && !isFdroidBuild
 
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
             isUniversalApk = true
         }
     }
