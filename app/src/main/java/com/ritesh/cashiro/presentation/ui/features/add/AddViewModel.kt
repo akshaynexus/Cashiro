@@ -11,6 +11,7 @@ import com.ritesh.cashiro.data.database.entity.AccountBalanceEntity
 import com.ritesh.cashiro.data.database.entity.SubcategoryEntity
 import com.ritesh.cashiro.data.database.entity.TransactionType
 import com.ritesh.cashiro.data.repository.AccountBalanceRepository
+import com.ritesh.cashiro.data.repository.CurrencyRepository
 import com.ritesh.cashiro.data.repository.SubcategoryRepository
 import com.ritesh.cashiro.data.service.AttachmentService
 import com.ritesh.cashiro.domain.usecase.AddEditLendBorrowPersonUseCase
@@ -50,6 +51,7 @@ constructor(
     private val accountBalanceRepository: AccountBalanceRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val updateSubscriptionUseCase: UpdateSubscriptionUseCase,
+    private val currencyRepository: CurrencyRepository,
     val attachmentService: AttachmentService,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -97,6 +99,15 @@ constructor(
                 initialValue = emptyList()
             )
 
+    // Effective base currency (unified > default > main account) used as the
+    // currency when no specific account is selected.
+    val baseCurrency: StateFlow<String> = currencyRepository.effectiveBaseCurrencyCode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "INR"
+        )
+
     // All Subcategories for sheet
     val allSubcategories = subcategoryRepository.subcategoriesMap
 
@@ -138,6 +149,7 @@ constructor(
 
         // Pre-select main account
         viewModelScope.launch {
+            val effectiveCurrency = currencyRepository.effectiveBaseCurrencyCode.first()
             accounts.filter { it.isNotEmpty() }.first().let { availableAccounts ->
                 val mainAccountKey = sharedPrefs.getString("main_account", null)
                 if (mainAccountKey != null) {
@@ -147,8 +159,13 @@ constructor(
                     if (mainAccount != null) {
                         _transactionUiState.update { it.copy(selectedAccount = mainAccount, currency = mainAccount.currency) }
                         _subscriptionUiState.update { it.copy(selectedAccount = mainAccount, currency = mainAccount.currency) }
+                        return@let
                     }
                 }
+                // No main account (e.g. cashew import with multiple accounts):
+                // fall back to the effective base currency.
+                _transactionUiState.update { it.copy(currency = effectiveCurrency) }
+                _subscriptionUiState.update { it.copy(currency = effectiveCurrency) }
             }
         }
     }
@@ -358,11 +375,14 @@ constructor(
     fun updateTransactionAccount(
         account: AccountBalanceEntity?
     ) {
-        _transactionUiState.update { currentState -> 
-            currentState.copy(
-                selectedAccount = account,
-                currency = account?.currency ?: "INR"
-            ) 
+        viewModelScope.launch {
+            val currency = account?.currency ?: currencyRepository.effectiveBaseCurrencyCode.first()
+            _transactionUiState.update { currentState -> 
+                currentState.copy(
+                    selectedAccount = account,
+                    currency = currency
+                ) 
+            }
         }
     }
 
@@ -568,11 +588,14 @@ constructor(
     fun updateSubscriptionAccount(
         account: AccountBalanceEntity?
     ) {
-        _subscriptionUiState.update { currentState -> 
-            currentState.copy(
-                selectedAccount = account,
-                currency = account?.currency ?: "INR"
-            ) 
+        viewModelScope.launch {
+            val currency = account?.currency ?: currencyRepository.effectiveBaseCurrencyCode.first()
+            _subscriptionUiState.update { currentState -> 
+                currentState.copy(
+                    selectedAccount = account,
+                    currency = currency
+                ) 
+            }
         }
     }
 

@@ -114,6 +114,7 @@ fun SubscriptionTabContent(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.subscriptionUiState.collectAsState()
+    val baseCurrency by viewModel.baseCurrency.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val accounts by viewModel.accounts.collectAsState()
 
@@ -214,7 +215,7 @@ fun SubscriptionTabContent(
             AmountInput(
                 amount = uiState.amount.ifEmpty { "0" },
                 currencySymbol = CurrencyFormatter.getCurrencySymbol(
-                    uiState.selectedAccount?.currency ?: "INR"
+                    uiState.selectedAccount?.currency ?: baseCurrency
                 ),
                 onClick = {
                     showNumberPad = true

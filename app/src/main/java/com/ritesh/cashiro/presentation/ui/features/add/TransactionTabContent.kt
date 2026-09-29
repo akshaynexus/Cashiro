@@ -128,6 +128,7 @@ fun TransactionTabContent(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.transactionUiState.collectAsState()
+    val baseCurrency by viewModel.baseCurrency.collectAsState()
     val categories by viewModel.categories.collectAsState()
     val transactionSubcategories by viewModel.transactionSubcategories.collectAsState()
     val transactionAttachments by viewModel.transactionAttachments.collectAsState()
@@ -177,7 +178,7 @@ fun TransactionTabContent(
             AmountInput(
                 amount = uiState.amount.ifEmpty { "0" },
                 currencySymbol = CurrencyFormatter.getCurrencySymbol(
-                    uiState.selectedAccount?.currency ?: "INR"
+                    uiState.selectedAccount?.currency ?: baseCurrency
                 ),
                 onClick = {
                     showNumberPad = true
