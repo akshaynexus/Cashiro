@@ -59,32 +59,48 @@ class LiteRtLmServiceImpl(
             return@withContext Result.success(Unit)
         }
 
-        try {
-            val cacheDir = File(context.cacheDir, "litert_lm_cache").also { it.mkdirs() }
-            val backend = resolveBackend()
+        val cacheDir = File(context.cacheDir, "litert_lm_cache").also { it.mkdirs() }
 
-            // EngineConfig is a Kotlin data class — use named parameters directly.
-            val config = EngineConfig(
-                modelPath = modelPath,
-                backend = backend,
-                cacheDir = cacheDir.absolutePath
-            )
-
-            Log.d(TAG, "Initializing LiteRT-LM engine. backend=$backend, model=$modelPath")
-            engine = Engine(config).also { it.initialize() }
-            Log.d(TAG, "LiteRT-LM engine initialized successfully.")
-
-            // Create a conversation session with tuned sampler parameters.
-            conversation = engine!!.createConversation(buildConversationConfig())
-            Log.d(TAG, "Conversation session created.")
-
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize LiteRT-LM engine", e)
-            engine = null
-            conversation = null
-            Result.failure(e)
+        // Build a priority-ordered list of backends to attempt.
+        // GPU (OpenCL) is tried first when available; CPU is always the final fallback.
+        val preferredBackend = resolveBackend()
+        val backendsToTry: List<Backend> = if (preferredBackend is Backend.CPU) {
+            listOf(preferredBackend)
+        } else {
+            listOf(preferredBackend, Backend.CPU())
         }
+
+        var lastException: Throwable? = null
+        for (backend in backendsToTry) {
+            try {
+                val config = EngineConfig(
+                    modelPath = modelPath,
+                    backend = backend,
+                    cacheDir = cacheDir.absolutePath
+                )
+                Log.d(TAG, "Initializing LiteRT-LM engine. backend=$backend, model=$modelPath")
+                engine = Engine(config).also { it.initialize() }
+                Log.d(TAG, "LiteRT-LM engine initialized successfully with backend=$backend")
+
+                conversation = engine!!.createConversation(buildConversationConfig())
+                Log.d(TAG, "Conversation session created.")
+                return@withContext Result.success(Unit)
+            } catch (t: Throwable) {
+                // Must catch Throwable, not Exception: native/JNI failures surface as
+                // UnsatisfiedLinkError (System.loadLibrary), ExceptionInInitializerError
+                // (NativeLibraryLoader runs in LiteRtLmJni.<clinit>), NoClassDefFoundError,
+                // and OutOfMemoryError on a ~1.5 GB model — none of which are Exceptions.
+                // Catching only Exception would let exactly the failures this loop exists to
+                // recover from propagate past it and defeat the CPU fallback.
+                Log.w(TAG, "Backend $backend failed (${t.javaClass.simpleName}: ${t.message}) — trying next backend if available.")
+                lastException = t
+                engine = null
+                conversation = null
+            }
+        }
+
+        Log.e(TAG, "All backends failed to initialize LiteRT-LM engine", lastException)
+        Result.failure(lastException ?: Exception("All backends failed"))
     }
 
     /**
@@ -97,11 +113,11 @@ class LiteRtLmServiceImpl(
                 val sb = StringBuilder()
                 generateResponseStream(prompt).collect { chunk -> sb.append(chunk) }
                 Result.success(sb.toString())
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                Log.e(TAG, "generateResponse error", e)
-                com.ritesh.cashiro.utils.CrashHandler.triggerCrash(context, e)
-                Result.failure(e)
+            } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
+                Log.e(TAG, "generateResponse error", t)
+                com.ritesh.cashiro.utils.CrashHandler.triggerCrash(context, t)
+                Result.failure(t)
             }
         }
 

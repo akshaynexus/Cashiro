@@ -84,13 +84,18 @@
     @android.webkit.JavascriptInterface <methods>;
 }
 
-# Remove logging in release
+# Remove debug/info/warning logs in release — but keep Log.e so native crash diagnostics survive.
+# Log.e calls in LiteRtLmServiceImpl and ChatViewModel carry Throwable arguments that are
+# essential for diagnosing JNI / UnsatisfiedLinkError failures in the field.
+#
+# SECURITY: because Log.e is NOT stripped, any Log.e that interpolates user content would
+# ship that content to the system log. Never log raw statement text, SMS bodies, account
+# numbers, or tokens at error level. Guard such sites with `if (BuildConfig.DEBUG)`.
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);
     public static *** w(...);
-    public static *** e(...);
 }
 
 # Protobuf

@@ -209,7 +209,7 @@ class ChatViewModel @Inject constructor(
                                 "Model is downloading. Please wait."
                             error.message?.contains("not downloaded") == true ->
                                 "AI model not downloaded. Go to Settings to download."
-                            else -> error.message ?: "Failed to generate response"
+                            else -> friendlyError(error)
                         }
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
@@ -234,7 +234,7 @@ class ChatViewModel @Inject constructor(
                         "Model is downloading. Please wait."
                     e.message?.contains("not downloaded") == true ->
                         "AI model not downloaded. Go to Settings to download."
-                    else -> e.message ?: "Failed to send message"
+                    else -> friendlyError(e)
                 }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -320,7 +320,7 @@ class ChatViewModel @Inject constructor(
                                         "Model is downloading. Please wait."
                                     error.message?.contains("not downloaded") == true ->
                                         "AI model not downloaded. Go to Settings to download."
-                                    else -> error.message ?: "Failed to generate response"
+                                    else -> friendlyError(error)
                                 }
                                 _uiState.value = _uiState.value.copy(
                                     isLoading = false,
@@ -340,7 +340,7 @@ class ChatViewModel @Inject constructor(
                         Log.e("ChatViewModel", "Exception in regenerateMessage", e)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            error = e.message ?: "Failed to regenerate response"
+                            error = friendlyError(e)
                         )
                         _currentResponse.value = ""
                     } else throw e
@@ -369,6 +369,8 @@ class ChatViewModel @Inject constructor(
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
+
+    private fun friendlyError(t: Throwable): String = ChatErrorMapper.friendly(t)
 }
 
 data class ChatUiState(
