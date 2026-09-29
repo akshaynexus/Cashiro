@@ -50,5 +50,9 @@ data class DataPrivacyUiState(
     val isPdfProcessing: Boolean = false,
     val pdfAnalysisResult: PdfAnalysisResult? = null,
     val pdfProcessingError: String? = null,
-    val hasNewAccountsCreated: Boolean = false
+    val hasNewAccountsCreated: Boolean = false,
+
+    // Main account selection after an import that resulted in multiple accounts
+    val showMainAccountSelection: Boolean = false,
+    val mainAccountSelectionAccounts: List<AccountBalanceEntity> = emptyList()
 )

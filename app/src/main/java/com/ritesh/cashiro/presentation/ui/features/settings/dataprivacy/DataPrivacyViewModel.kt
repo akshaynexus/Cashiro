@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ritesh.cashiro.data.backup.BackupConfiguration
@@ -19,6 +20,7 @@ import com.ritesh.cashiro.data.database.entity.TransactionEntity
 import com.ritesh.cashiro.data.database.entity.TransactionType
 import com.ritesh.cashiro.data.parser.pdf.GPayPdfParser
 import com.ritesh.cashiro.data.parser.pdf.PhonePePdfParser
+import com.ritesh.cashiro.data.preferences.UserPreferencesRepository
 import com.ritesh.cashiro.data.repository.AccountBalanceRepository
 import com.ritesh.cashiro.data.repository.TransactionRepository
 import com.ritesh.cashiro.domain.repository.RuleRepository
@@ -31,6 +33,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -48,9 +51,12 @@ class DataPrivacyViewModel @Inject constructor(
     private val cashewImporter: CashewImporter,
     private val transactionRepository: TransactionRepository,
     private val accountBalanceRepository: AccountBalanceRepository,
+    private val userPreferencesRepository: UserPreferencesRepository,
     private val ruleRepository: RuleRepository,
     private val ruleEngine: RuleEngine
 ) : ViewModel() {
+
+    private val sharedPrefs = context.getSharedPreferences("account_prefs", Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(DataPrivacyUiState())
     val uiState: StateFlow<DataPrivacyUiState> = _uiState.asStateFlow()
@@ -104,6 +110,7 @@ class DataPrivacyViewModel @Inject constructor(
                 when (val result = backupImporter.importBackup(uri, ImportStrategy.MERGE)) {
                     is ImportResult.Success -> {
                         _uiState.update { it.copy(importExportMessage = "Import successful! Imported ${result.importedTransactions} transactions, ${result.importedCategories} categories.") }
+                        maybePromptMainAccountSelection(result.importedAccounts)
                     }
                     is ImportResult.Error -> {
                         _uiState.update { it.copy(importExportMessage = "Import failed: ${result.message}") }
@@ -126,6 +133,7 @@ class DataPrivacyViewModel @Inject constructor(
                                 (if (result.failedAttachments > 0) " (${result.failedAttachments} failed)" else "")
                         } else ""
                         _uiState.update { it.copy(importExportMessage = "Cashew import successful! Imported ${result.importedTransactions} transactions, ${result.importedCategories} categories$attachmentSuffix.") }
+                        maybePromptMainAccountSelection(result.importedAccounts)
                     }
                     is ImportResult.Error -> {
                         _uiState.update { it.copy(importExportMessage = "Cashew import failed: ${result.message}") }
@@ -134,6 +142,60 @@ class DataPrivacyViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.update { it.copy(importExportMessage = "Cashew import error: ${e.message}") }
             }
+        }
+    }
+
+    /**
+     * After a successful import, if the backup contained multiple accounts and the user
+     * does not currently have a valid main account (e.g. a Cashew backup with several
+     * wallets imported into a fresh app), prompt them to pick which account should act
+     * as the main account.
+     */
+    private suspend fun maybePromptMainAccountSelection(importedAccountCount: Int) {
+        if (importedAccountCount < 2) return
+
+        val mainAccountKey = sharedPrefs.getString("main_account", null)
+        val accounts = accountBalanceRepository.getAllLatestBalances().first()
+
+        // Only prompt when there is no main account, or the configured main account no
+        // longer refers to an existing account (stale/invalid).
+        val mainAccountValid = accounts.any {
+            "${it.bankName}_${it.accountLast4}" == mainAccountKey
+        }
+        if (mainAccountKey.isNullOrBlank() || !mainAccountValid) {
+            _uiState.update {
+                it.copy(showMainAccountSelection = true, mainAccountSelectionAccounts = accounts)
+            }
+        }
+    }
+
+    fun selectMainAccount(account: AccountBalanceEntity) {
+        viewModelScope.launch {
+            val key = "${account.bankName}_${account.accountLast4}"
+            sharedPrefs.edit { putString("main_account", key) }
+            userPreferencesRepository.updateBaseCurrency(account.currency)
+
+            // Keep the built-in Cash wallet in sync with the main account's currency
+            val cashWallet = accountBalanceRepository.getLatestBalance("Cash", "wallet")
+            if (cashWallet != null && cashWallet.currency != account.currency) {
+                accountBalanceRepository.insertBalance(
+                    cashWallet.copy(
+                        id = 0,
+                        currency = account.currency,
+                        timestamp = LocalDateTime.now(),
+                        sourceType = "MAIN_ACCOUNT_SYNC"
+                    )
+                )
+            }
+            _uiState.update {
+                it.copy(showMainAccountSelection = false, mainAccountSelectionAccounts = emptyList())
+            }
+        }
+    }
+
+    fun dismissMainAccountSelection() {
+        _uiState.update {
+            it.copy(showMainAccountSelection = false, mainAccountSelectionAccounts = emptyList())
         }
     }
     

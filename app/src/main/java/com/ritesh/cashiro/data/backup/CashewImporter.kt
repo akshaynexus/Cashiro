@@ -693,7 +693,8 @@ class CashewImporter @Inject constructor(
                 importedCategories = importedCategoriesCount,
                 skippedDuplicates = skippedCount,
                 importedAttachments = importedAttachmentsCount,
-                failedAttachments = failedAttachmentsCount
+                failedAttachments = failedAttachmentsCount,
+                importedAccounts = walletsList.size
             )
         } finally {
             db.close()
@@ -711,6 +712,7 @@ class CashewImporter @Inject constructor(
         var failedAttachmentsCount = 0
 
         var driveToken: String? = null
+        val walletsToRegister = mutableSetOf<String>()
 
         database.withTransaction {
             val existingTxnsMap = database.transactionDao().getAllTransactions().first()
@@ -738,7 +740,6 @@ class CashewImporter @Inject constructor(
 
                 var lineStr = reader.readLine()
                 var rowCounter = 0
-                val walletsToRegister = mutableSetOf<String>()
                 val txnsToImport = mutableListOf<TransactionEntity>()
 
                 while (lineStr != null) {
@@ -878,7 +879,8 @@ class CashewImporter @Inject constructor(
             importedCategories = importedCategoriesCount,
             skippedDuplicates = skippedCount,
             importedAttachments = importedAttachmentsCount,
-            failedAttachments = failedAttachmentsCount
+            failedAttachments = failedAttachmentsCount,
+            importedAccounts = walletsToRegister.size
         )
     }
 

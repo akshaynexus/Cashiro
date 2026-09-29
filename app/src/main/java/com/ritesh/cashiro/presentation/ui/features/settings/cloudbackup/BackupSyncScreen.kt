@@ -52,6 +52,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -101,6 +104,7 @@ import com.ritesh.cashiro.data.cloud.SyncStatus
 import com.ritesh.cashiro.presentation.effects.overScrollVertical
 import com.ritesh.cashiro.presentation.ui.components.CashiroCheckbox
 import com.ritesh.cashiro.presentation.ui.components.CustomTitleTopAppBar
+import com.ritesh.cashiro.presentation.ui.components.AccountSelectionSheet
 import com.ritesh.cashiro.presentation.ui.components.DeleteCloudSnapshotDialog
 import com.ritesh.cashiro.presentation.ui.components.GenericTypeSwitcher
 import com.ritesh.cashiro.presentation.ui.components.ListItem
@@ -1437,6 +1441,26 @@ fun BackupSyncScreen(
             },
             onDismiss = { dataPrivacyViewModel.dismissPdfImport() }
         )
+    }
+
+    // Main account selection after an import that left multiple accounts without a main one
+    if (dataPrivacyUiState.showMainAccountSelection) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { dataPrivacyViewModel.dismissMainAccountSelection() },
+            sheetState = sheetState,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            AccountSelectionSheet(
+                accounts = dataPrivacyUiState.mainAccountSelectionAccounts,
+                selectedAccount = null,
+                title = stringResource(R.string.select_main_account_title),
+                showNoneOption = false,
+                onAccountSelected = { account ->
+                    account?.let { dataPrivacyViewModel.selectMainAccount(it) }
+                }
+            )
+        }
     }
 }
 

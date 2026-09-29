@@ -272,7 +272,8 @@ class BackupImporter @Inject constructor(
                 ImportResult.Success(
                     importedTransactions = importedTransactions,
                     importedCategories = importedCategories,
-                    skippedDuplicates = 0
+                    skippedDuplicates = 0,
+                    importedAccounts = backup.database.accountBalances.size
                 )
             } catch (e: Exception) {
                 throw e
@@ -416,7 +417,8 @@ class BackupImporter @Inject constructor(
                 ImportResult.Success(
                     importedTransactions = importedTransactions,
                     importedCategories = importedCategories,
-                    skippedDuplicates = skippedDuplicates
+                    skippedDuplicates = skippedDuplicates,
+                    importedAccounts = backup.database.accountBalances.size
                 )
             } catch (e: Exception) {
                 throw e
@@ -551,7 +553,8 @@ class BackupImporter @Inject constructor(
                 ImportResult.Success(
                     importedTransactions = importedTransactions,
                     importedCategories = importedCategories,
-                    skippedDuplicates = skippedDuplicates
+                    skippedDuplicates = skippedDuplicates,
+                    importedAccounts = backup.database.accountBalances.size
                 )
             } catch (e: Exception) {
                 throw e
