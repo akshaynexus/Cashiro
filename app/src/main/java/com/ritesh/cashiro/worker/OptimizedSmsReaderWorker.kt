@@ -8,6 +8,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.ritesh.cashiro.BuildConfig
 import com.ritesh.cashiro.data.database.entity.UnrecognizedSmsEntity
 import com.ritesh.cashiro.data.preferences.UserPreferencesRepository
 import com.ritesh.cashiro.data.repository.AccountBalanceRepository
@@ -449,7 +450,13 @@ private suspend fun parseMessage(sms: SmsMessage): ParseResult {
             ParseResult.Skipped("Parsing returned null")
         }
     } catch (e: Exception) {
-        Log.e(TAG, "Error parsing SMS from ${sms.sender}: ${e.message}")
+        // sms.sender is a phone number (PII). Log.e is intentionally not stripped from
+        // release builds, so keep the sender out of release logs.
+        if (BuildConfig.DEBUG) {
+            Log.e(TAG, "Error parsing SMS from ${sms.sender}: ${e.message}")
+        } else {
+            Log.e(TAG, "Error parsing SMS: ${e.message}")
+        }
         ParseResult.Skipped("Error: ${e.message}")
     }
 }

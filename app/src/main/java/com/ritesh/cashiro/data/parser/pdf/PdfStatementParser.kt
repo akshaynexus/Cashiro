@@ -1,6 +1,7 @@
 package com.ritesh.cashiro.data.parser.pdf
 
 import android.util.Log
+import com.ritesh.cashiro.BuildConfig
 import com.ritesh.parser.core.ParsedTransaction
 import com.ritesh.parser.core.TransactionType
 import java.math.BigDecimal
@@ -151,12 +152,12 @@ class GPayPdfParser : PdfStatementParser {
 class PhonePePdfParser : PdfStatementParser {
     override fun canHandle(text: String): Boolean {
         val canHandle = text.contains("PhonePe", ignoreCase = true) || text.contains("Phone Pe", ignoreCase = true)
-        Log.e("PDF_PARSER_DEBUG", "PhonePePdfParser canHandle: $canHandle")
+        Log.d("PDF_PARSER_DEBUG", "PhonePePdfParser canHandle: $canHandle")
         return canHandle
     }
 
     override fun parse(text: String): List<ParsedTransaction> {
-        Log.e("PDF_PARSER_DEBUG", "PhonePePdfParser starting parse. Text length: ${text.length}")
+        Log.d("PDF_PARSER_DEBUG", "PhonePePdfParser starting parse. Text length: ${text.length}")
         val transactions = mutableListOf<ParsedTransaction>()
         
         // Flexible Date Regex for PhonePe statements
@@ -168,10 +169,16 @@ class PhonePePdfParser : PdfStatementParser {
         Log.d("PDF_PARSER_DEBUG", "Found ${matches.size} date matches for PhonePe")
 
         if (matches.isEmpty()) {
-            val firstPart = text.take(500)
-            val hexDump = firstPart.map { String.format("\\u%04x", it.toInt()) }.joinToString("")
-            Log.e("PDF_PARSER_DEBUG", "No date matches found in PhonePe text. First 500 chars: $firstPart")
-            Log.e("PDF_PARSER_DEBUG", "Hex dump of first 500 chars: $hexDump")
+            // The statement text is raw bank data (account numbers, names, amounts, balances).
+            // Only ever emit it in debug builds — Log.e is deliberately NOT stripped from
+            // release (see proguard-rules.pro), so an unguarded log here would ship the
+            // user's full statement into the system log.
+            if (BuildConfig.DEBUG) {
+                val firstPart = text.take(500)
+                val hexDump = firstPart.map { String.format("\\u%04x", it.toInt()) }.joinToString("")
+                Log.e("PDF_PARSER_DEBUG", "No date matches found in PhonePe text. First 500 chars: $firstPart")
+                Log.e("PDF_PARSER_DEBUG", "Hex dump of first 500 chars: $hexDump")
+            }
             return emptyList()
         }
 
