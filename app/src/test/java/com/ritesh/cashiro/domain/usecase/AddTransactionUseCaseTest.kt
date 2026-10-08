@@ -371,7 +371,7 @@ class AddTransactionUseCaseTest {
         balanceDao: FakeAccountBalanceDao
     ): Pair<AddTransactionUseCase, TransactionRepository> {
         val context = ContextWrapper(null)
-        val accountBalanceRepo = AccountBalanceRepository(balanceDao, context)
+        val accountBalanceRepo = AccountBalanceRepository(balanceDao, context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))
         val dao = FakeTransactionDao()
         transactionDao = dao
         val transactionRepo = TransactionRepository(dao, accountBalanceRepo)
@@ -395,7 +395,8 @@ class AddTransactionUseCaseTest {
             return id
         }
 
-        override suspend fun getTransactionByHash(transactionHash: String): TransactionEntity? = null
+        override suspend fun getDeletedBySms(smsBody: String, smsSender: String?): TransactionEntity? = null
+    override suspend fun getTransactionByHash(transactionHash: String): TransactionEntity? = null
 
         override fun getAllTransactions(): Flow<List<TransactionEntity>> = flowOf(emptyList())
         override fun getTransactionCount(): Flow<Int> = flowOf(0)
@@ -421,6 +422,8 @@ class AddTransactionUseCaseTest {
         override suspend fun updateTransaction(transaction: TransactionEntity) = Unit
         override suspend fun deleteTransaction(transaction: TransactionEntity) = Unit
         override suspend fun deleteTransactionById(transactionId: Long) = Unit
+        override suspend fun deleteRebuildableSmsTransactions() = Unit
+        override suspend fun getTransactionByAmountAndDate(amount: BigDecimal, dateStart: LocalDateTime, dateEnd: LocalDateTime): List<TransactionEntity> = emptyList()
         override suspend fun deleteAllTransactions() = Unit
         override suspend fun deleteSampleTransactions() = Unit
         override suspend fun updateCategoryForMerchant(merchantName: String, newCategory: String) = Unit
@@ -499,6 +502,9 @@ class AddTransactionUseCaseTest {
     }
 
     private class FakeAccountBalanceDao : AccountBalanceDao() {
+        override suspend fun getBalancesForTransaction(transactionId: Long): List<AccountBalanceEntity> = emptyList()
+        override suspend fun deleteBalancesForTransaction(transactionId: Long) = Unit
+        override suspend fun deletePhantomGPayAccounts(): Int = 0
         private val balances = mutableMapOf<Pair<String, String>, MutableList<AccountBalanceEntity>>()
         private var nextId = 1L
 
@@ -540,6 +546,7 @@ class AddTransactionUseCaseTest {
         override fun getLatestBalanceFlow(bankName: String, accountLast4: String): Flow<AccountBalanceEntity?> = flowOf(null)
         override fun getAllLatestBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())
         override fun getAllBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())
+        override suspend fun deleteRebuildableBalances() = Unit
         override suspend fun deleteAllBalances() = Unit
         override suspend fun deleteSampleBalances() = Unit
         override fun getCurrentMonthLatestBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())

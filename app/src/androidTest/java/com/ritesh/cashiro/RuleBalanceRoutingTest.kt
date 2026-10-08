@@ -26,7 +26,7 @@ class RuleBalanceRoutingTest {
             db.accountBalanceDao().insertBalance(AccountBalanceEntity(bankName = "Other Bank", accountLast4 = "2000", balance = BigDecimal("1000"), timestamp = LocalDateTime.of(2025, 1, 1, 0, 0), sourceType = "MANUAL"))
             val selected = input.toEntity().copy(bankName = "Other Bank", accountNumber = "2000", transactionType = TransactionType.CREDIT, amount = BigDecimal("25"))
             val id = db.transactionDao().insertTransaction(selected)
-            BalanceUpdateProcessor(CardRepository(db.cardDao()), AccountBalanceRepository(db.accountBalanceDao(), context)).process(input, selected, id)
+            BalanceUpdateProcessor(CardRepository(db.cardDao()), AccountBalanceRepository(db.accountBalanceDao(), context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))).process(input, selected, id)
             val result = db.accountBalanceDao().getLatestBalance("Other Bank", "2000")!!
             assertEquals(0, result.balance.compareTo(BigDecimal("1025")))
             assertFalse(result.isCreditCard)
@@ -40,10 +40,44 @@ class RuleBalanceRoutingTest {
             val input = parsed(card = true)
             val selected = input.toEntity().copy(bankName = "Rule Bank")
             val id = db.transactionDao().insertTransaction(selected)
-            BalanceUpdateProcessor(cards, AccountBalanceRepository(db.accountBalanceDao(), context)).process(input, selected, id)
+            BalanceUpdateProcessor(cards, AccountBalanceRepository(db.accountBalanceDao(), context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))).process(input, selected, id)
             assertNotNull(db.accountBalanceDao().getLatestBalance("Example Bank", "2000"))
             assertNull(db.accountBalanceDao().getLatestBalance("Rule Bank", "1000"))
             assertEquals("2000", cards.getCard("Example Bank", "1000")?.accountLast4)
+        } finally { db.close() }
+    }
+    @Test fun originalCreditWithoutCardFlagRetainsIssuerWhenBankRuleChangesIt() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        try {
+            val input = parsed().copy(type = com.ritesh.parser.core.TransactionType.CREDIT)
+            val selected = input.toEntity().copy(bankName = "Rule Bank", accountNumber = "2000")
+            val id = db.transactionDao().insertTransaction(selected)
+            BalanceUpdateProcessor(CardRepository(db.cardDao()), AccountBalanceRepository(db.accountBalanceDao(), context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))).process(input, selected, id)
+            assertNotNull(db.accountBalanceDao().getLatestBalance("Example Bank", "1000"))
+            assertNull(db.accountBalanceDao().getLatestBalance("Rule Bank", "2000"))
+        } finally { db.close() }
+    }
+    @Test fun suffixNormalizationRetainsBankReportedAbsoluteBalance() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        try {
+            val balances = AccountBalanceRepository(db.accountBalanceDao(), context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))
+            val input = parsed().copy(accountLast4 = "000001000")
+            val selected = balances.resolveEntityAccountNumber(input.toEntity(), input)
+            val id = db.transactionDao().insertTransaction(selected)
+            BalanceUpdateProcessor(CardRepository(db.cardDao()), balances).process(input, selected, id)
+            val result = db.accountBalanceDao().getLatestBalance("Example Bank", "1000")!!
+            assertEquals(0, result.balance.compareTo(BigDecimal("900")))
+        } finally { db.close() }
+    }
+    @Test fun deletedRawSmsStillMatchesAfterReplacementRetainsAnOlderHash() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        try {
+            val incoming = parsed().toEntity()
+            val deleted = incoming.copy(transactionHash = "older-partner-hash", isDeleted = true)
+            val id = db.transactionDao().insertTransaction(deleted)
+            assertNull(db.transactionDao().getTransactionByHash(incoming.transactionHash))
+            assertEquals(id, db.transactionDao().getDeletedBySms(incoming.smsBody!!, incoming.smsSender)?.id)
+            assertNull(db.transactionDao().getDeletedBySms(incoming.smsBody!!, "OTHER"))
         } finally { db.close() }
     }
 }

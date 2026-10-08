@@ -67,6 +67,7 @@ class PortRegressionTest {
                 sql.execSQL("INSERT INTO account_balances (bank_name, account_last4, balance, timestamp, created_at, currency, source_type) VALUES (?, ?, '1000', '2026-01-01T12:00', '2026-01-01T12:00', 'INR', 'MANUAL')", arrayOf(bank, suffix))
             }
             sql.execSQL("INSERT INTO transactions (id, amount, merchant_name, category, transaction_type, date_time, transaction_hash, is_recurring, is_deleted, created_at, updated_at, currency, attachments, is_sample, bank_name, account_number, from_account, to_account) SELECT 2, amount, merchant_name, category, transaction_type, date_time, 'ambiguous', is_recurring, is_deleted, created_at, updated_at, currency, attachments, is_sample, 'Example Bank', '2000', '2000', '2000' FROM transactions WHERE id = 1")
+            sql.execSQL("INSERT INTO transactions (id, amount, merchant_name, category, transaction_type, date_time, transaction_hash, is_recurring, is_deleted, created_at, updated_at, currency, attachments, is_sample, bank_name, account_number, from_account, to_account) SELECT 3, amount, merchant_name, category, transaction_type, date_time, 'no-bank-evidence', is_recurring, is_deleted, created_at, updated_at, currency, attachments, is_sample, bank_name, account_number, from_account, '4000' FROM transactions WHERE id = 1")
             sql.version = version
         }
         val db = Room.databaseBuilder(context, CashiroDatabase::class.java, name).addMigrations(*CashiroDatabase.ALL_MIGRATIONS).build()
@@ -76,10 +77,44 @@ class PortRegressionTest {
             assertEquals("Other Bank", db.transactionDao().getTransactionById(1)?.toBankName)
             assertNull(db.transactionDao().getTransactionById(2)?.fromBankName)
             assertNull(db.transactionDao().getTransactionById(2)?.toBankName)
+            assertEquals("Example Bank", db.transactionDao().getTransactionById(3)?.fromBankName)
+            assertNull(db.transactionDao().getTransactionById(3)?.toBankName)
             val rowId = db.transactionDao().insertTransaction(transaction().copy(fromBankName = null, toBankName = null))
             assertNull(db.transactionDao().getTransactionById(rowId)?.toBankName)
             assertEquals(63, db.openHelper.readableDatabase.version)
         } finally { db.close(); context.deleteDatabase(name) }
+    }
+
+    @Test fun phantomCleanupPreservesManualAndSoftDeletedHistory() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        try {
+            val deletedId = db.transactionDao().insertTransaction(transaction(bank = "State Bank of India", suffix = "3000").copy(isDeleted = true))
+            db.accountBalanceDao().insertBalance(balance("1000", "TRANSACTION_CALCULATED"))
+            db.accountBalanceDao().insertBalance(balance("2000", "MANUAL"))
+            db.accountBalanceDao().insertBalance(balance("3000", "TRANSACTION", deletedId))
+            db.accountBalanceDao().insertBalance(balance("4000", "SMS_BALANCE"))
+            assertEquals(1, db.accountBalanceDao().deletePhantomGPayAccounts())
+            assertNotNull(db.accountBalanceDao().getLatestBalance("State Bank of India", "2000"))
+            assertNotNull(db.accountBalanceDao().getLatestBalance("State Bank of India", "3000"))
+            assertNotNull(db.accountBalanceDao().getLatestBalance("State Bank of India", "4000"))
+        } finally { db.close() }
+    }
+
+    @Test fun removingDuplicateRecalculatesLaterSourceBalancesUntilAnIndependentAnchor() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        try {
+            val dao = db.accountBalanceDao()
+            val time = LocalDateTime.of(2026, 1, 1, 12, 0)
+            dao.insertBalance(balance("1000", "MANUAL").copy(balance = BigDecimal("1000"), timestamp = time.minusMinutes(1)))
+            val duplicate = db.transactionDao().insertTransaction(transaction(bank = "State Bank of India", suffix = "1000", hash = "duplicate").copy(transactionType = TransactionType.EXPENSE))
+            dao.insertBalance(balance("1000", "TRANSACTION_CALCULATED", duplicate))
+            val real = db.transactionDao().insertTransaction(transaction(bank = "State Bank of India", suffix = "1000", hash = "real").copy(amount = BigDecimal("50"), transactionType = TransactionType.EXPENSE, dateTime = time.plusMinutes(1)))
+            dao.insertBalance(balance("1000", "TRANSACTION_CALCULATED", real).copy(balance = BigDecimal("850"), timestamp = time.plusMinutes(1)))
+            dao.insertBalance(balance("1000", "SMS_BALANCE").copy(balance = BigDecimal("700"), timestamp = time.plusMinutes(2)))
+            dao.deleteTransactionBalancesAndRecalculate(duplicate)
+            assertEquals(0, dao.getBalanceByTransactionId(real)!!.balance.compareTo(BigDecimal("950")))
+            assertEquals(0, dao.getLatestBalance("State Bank of India", "1000")!!.balance.compareTo(BigDecimal("700")))
+        } finally { db.close() }
     }
 
     @Test fun oldBackupDefaultsAndRememberedAliases() {

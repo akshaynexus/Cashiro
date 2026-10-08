@@ -21,6 +21,9 @@ class TransactionRepository @Inject constructor(
     fun getAllTransactions(): Flow<List<TransactionEntity>> = transactionDao.getAllTransactions()
         .map { list -> list.filter { it.transactionType != TransactionType.BALANCE_UPDATE } }
 
+    suspend fun getTransactionByAmountAndDate(amount: BigDecimal, dateStart: LocalDateTime, dateEnd: LocalDateTime): List<TransactionEntity> =
+        transactionDao.getTransactionByAmountAndDate(amount, dateStart, dateEnd)
+
     fun getTransactionCount(): Flow<Int> = transactionDao.getTransactionCount()
 
     suspend fun getTransactionById(id: Long): TransactionEntity? =

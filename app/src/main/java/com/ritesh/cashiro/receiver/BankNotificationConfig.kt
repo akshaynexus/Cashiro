@@ -7,6 +7,8 @@ object BankNotificationConfig {
         "com.enparabank.retail" to "Enpara"
     )
 
+    val notificationAliases: Set<String> = packageToAlias.values.toSet()
+
     private val allowedPackages: Set<String> = packageToAlias.keys
 
     fun isAllowed(packageName: String): Boolean = allowedPackages.contains(packageName)

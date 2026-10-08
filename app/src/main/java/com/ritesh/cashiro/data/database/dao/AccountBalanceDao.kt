@@ -280,6 +280,47 @@ abstract class AccountBalanceDao {
     @Query("SELECT * FROM account_balances ORDER BY timestamp DESC")
     abstract fun getAllBalances(): Flow<List<AccountBalanceEntity>>
     
+    @Query("SELECT * FROM account_balances WHERE transaction_id = :transactionId ORDER BY timestamp")
+    abstract suspend fun getBalancesForTransaction(transactionId: Long): List<AccountBalanceEntity>
+
+    /** Rebuild only derived snapshots after removing a duplicate; independent anchors stay authoritative. */
+    @Transaction
+    open suspend fun deleteTransactionBalancesAndRecalculate(transactionId: Long) {
+        val removed = getBalancesForTransaction(transactionId)
+        deleteBalancesForTransaction(transactionId)
+        removed.distinctBy { it.bankName to it.accountLast4 }.forEach { source ->
+            var running = getLatestBalanceOnOrBefore(source.bankName, source.accountLast4, source.timestamp)?.balance ?: BigDecimal.ZERO
+            for (row in getBalancesAfterWithTransactions(source.bankName, source.accountLast4, source.timestamp)) {
+                if (row.transactionBalanceAfter != null || row.sourceType !in setOf(SOURCE_TRANSACTION_CALCULATED, "TRANSACTION")) break
+                val amount = row.transactionAmount ?: break
+                val type = row.transactionType?.let { runCatching { TransactionType.valueOf(it) }.getOrNull() } ?: break
+                if (row.isDeleted != true) running = calculateTransactionBalance(running, amount, type, row.isCreditCard)
+                updateAndInvalidate(row.id, running)
+            }
+        }
+    }
+
+    @Query("DELETE FROM account_balances WHERE transaction_id = :transactionId")
+    abstract suspend fun deleteBalancesForTransaction(transactionId: Long)
+
+    // Delete only unlinked, transaction-derived residue. Preserve independent signals and soft-deleted history.
+    @Query("""
+        DELETE FROM account_balances WHERE bank_name = 'State Bank of India'
+        AND NOT EXISTS (SELECT 1 FROM transactions t WHERE t.bank_name = account_balances.bank_name
+            AND t.account_number = account_balances.account_last4 AND t.is_deleted = 0)
+        AND NOT EXISTS (SELECT 1 FROM account_balances b WHERE b.bank_name = account_balances.bank_name
+            AND b.account_last4 = account_balances.account_last4 AND
+            (b.transaction_id IS NOT NULL OR b.source_type IS NULL OR
+             b.source_type NOT IN ('TRANSACTION', 'TRANSACTION_CALCULATED')))
+    """)
+    abstract suspend fun deletePhantomGPayAccounts(): Int
+
+    @Query("""DELETE FROM account_balances
+        WHERE (transaction_id IS NOT NULL AND transaction_id NOT IN (SELECT id FROM transactions))
+        OR (transaction_id IS NULL AND source_type IS NULL AND sms_source IS NOT NULL)
+    """)
+    abstract suspend fun deleteRebuildableBalances()
+
     @Query("DELETE FROM account_balances")
     abstract suspend fun deleteAllBalances()
     

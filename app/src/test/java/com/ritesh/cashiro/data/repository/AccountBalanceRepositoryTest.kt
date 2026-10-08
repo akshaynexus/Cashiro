@@ -62,7 +62,7 @@ class AccountBalanceRepositoryTest {
                 transactionId = 22
             )
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         repository.insertTransactionBalance(
             bankName = "Test Bank",
@@ -116,7 +116,7 @@ class AccountBalanceRepositoryTest {
                 )
             )
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         repository.insertTransactionBalance(
             bankName = "Test Bank",
@@ -169,7 +169,7 @@ class AccountBalanceRepositoryTest {
                 )
             )
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         repository.insertTransactionBalance(
             bankName = "Test Bank",
@@ -193,7 +193,7 @@ class AccountBalanceRepositoryTest {
         val dao = FakeAccountBalanceDao(
             suffixMatches = mapOf("Indian Overseas Bank" to mapOf("99" to listOf("1999")))
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         assertEquals("99", repository.resolveAccountLast4("Indian Overseas Bank", "99"))
     }
@@ -203,7 +203,7 @@ class AccountBalanceRepositoryTest {
         val dao = FakeAccountBalanceDao(
             suffixMatches = mapOf("Test Bank" to mapOf("99" to listOf("1999", "2099")))
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         assertEquals("99", repository.resolveAccountLast4("Test Bank", "99"))
     }
@@ -211,7 +211,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun resolveAccountLast4DoesNotQueryForNonDigitSuffix() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         assertEquals("%", repository.resolveAccountLast4("Test Bank", "%"))
         assertEquals(0, dao.suffixLookupCount)
@@ -220,7 +220,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun resolveAccountLast4TrimsToLast4ForLongInputs() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         assertEquals("6789", repository.resolveAccountLast4("Test Bank", "123456789"))
     }
@@ -228,7 +228,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun resolveAccountLast4DoesNotQueryForBlankSuffix() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         assertEquals("", repository.resolveAccountLast4("Test Bank", ""))
         assertEquals(0, dao.suffixLookupCount)
@@ -257,7 +257,7 @@ class AccountBalanceRepositoryTest {
                 isCreditCard = true
             )
         )
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         repository.insertTransactionBalance(
             bankName = "Test Bank",
@@ -279,7 +279,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun backdatedInsertRecalculatesCalculatedRowsForward() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         // Seed initial balance at T1 (1000)
         val t1 = LocalDateTime.of(2025, 1, 1, 10, 0)
@@ -322,7 +322,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun explicitSmsBalanceStopsRecalculation() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         val t1 = LocalDateTime.of(2025, 1, 1, 10, 0)
         dao.seedBalance(AccountBalanceEntity(bankName = "Test Bank", accountLast4 = "1234", balance = BigDecimal("1000"), timestamp = t1, sourceType = "CALCULATED"))
@@ -369,7 +369,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun manualBoundaryCarriesDeltaAndStopsCascade() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         val t1 = LocalDateTime.of(2025, 1, 1, 10, 0)
         dao.seedBalance(AccountBalanceEntity(bankName = "Test Bank", accountLast4 = "1234", balance = BigDecimal("1000"), timestamp = t1, sourceType = "CALCULATED"))
@@ -417,7 +417,7 @@ class AccountBalanceRepositoryTest {
     @Test
     fun creditCardIncomePaymentReducesOutstandingBalance() = runTest {
         val dao = FakeAccountBalanceDao()
-        val repository = AccountBalanceRepository(dao, ContextWrapper(null))
+        val repository = AccountBalanceRepository(dao, ContextWrapper(null), com.ritesh.cashiro.data.preferences.BankAccountMergeStore(ContextWrapper(null)))
 
         val t1 = LocalDateTime.of(2025, 1, 1, 10, 0)
         dao.seedBalance(AccountBalanceEntity(
@@ -457,6 +457,9 @@ class AccountBalanceRepositoryTest {
         private val balancesAfter: List<AccountBalanceTransactionInfo> = emptyList(),
         private val suffixMatches: Map<String, Map<String, List<String>>> = emptyMap()
     ) : AccountBalanceDao() {
+        override suspend fun getBalancesForTransaction(transactionId: Long): List<AccountBalanceEntity> = emptyList()
+        override suspend fun deleteBalancesForTransaction(transactionId: Long) { balances.removeAll { it.transactionId == transactionId } }
+        override suspend fun deletePhantomGPayAccounts(): Int = 0
         val insertedBalances = mutableListOf<AccountBalanceEntity>()
         val updatedBalances = mutableMapOf<Long, BigDecimal>()
         var suffixLookupCount = 0
@@ -551,6 +554,7 @@ class AccountBalanceRepositoryTest {
 
         override fun getAllBalances(): Flow<List<AccountBalanceEntity>> = flowOf(latestBalances.values.toList())
 
+        override suspend fun deleteRebuildableBalances() = Unit
         override suspend fun deleteAllBalances() = Unit
 
         override suspend fun deleteSampleBalances() = Unit

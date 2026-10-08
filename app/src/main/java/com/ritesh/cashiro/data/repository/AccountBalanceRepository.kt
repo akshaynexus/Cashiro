@@ -18,7 +18,8 @@ import javax.inject.Singleton
 @Singleton
 class AccountBalanceRepository @Inject constructor(
     private val accountBalanceDao: AccountBalanceDao,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val bankAccountMerges: BankAccountMergeStore
 ) {
     suspend fun insertBalance(balance: AccountBalanceEntity): Long {
         val balanceWithIconName = if (balance.iconName.isEmpty() && balance.iconResId != 0) {
@@ -45,7 +46,7 @@ class AccountBalanceRepository @Inject constructor(
         if (accountLast4.isBlank() || !accountLast4.all { it.isDigit() }) return accountLast4
         if (accountLast4.length >= 4) return accountLast4.takeLast(4)
         if (accountLast4.length != 3) return accountLast4
-        return BankAccountMergeStore(context).resolveSuffix(bankName, currency, accountLast4)
+        return bankAccountMerges.resolveSuffix(bankName, currency, accountLast4)
     }
 
     suspend fun resolveEntityAccountNumber(

@@ -3,11 +3,17 @@ package com.ritesh.cashiro.data.database.dao
 import androidx.room.*
 import com.ritesh.cashiro.data.database.entity.TransactionEntity
 import com.ritesh.cashiro.data.database.entity.TransactionType
+import java.math.BigDecimal
 import java.time.LocalDateTime
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
+    /** Raw sender/body identity survives retained hashes during in-place GPay replacement. */
+    @Query("""SELECT * FROM transactions WHERE is_deleted = 1 AND sms_body = :smsBody
+        AND (sms_sender = :smsSender OR (:smsSender IS NULL AND sms_sender IS NULL)) LIMIT 1""")
+    suspend fun getDeletedBySms(smsBody: String, smsSender: String?): TransactionEntity?
+
 
     @Query("SELECT * FROM transactions WHERE is_deleted = 0 ORDER BY date_time DESC")
     fun getAllTransactions(): Flow<List<TransactionEntity>>
@@ -149,6 +155,15 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE id = :transactionId")
     suspend fun deleteTransactionById(transactionId: Long)
 
+    /** Rescans rebuild plain SMS rows while retaining user-curated and imported records. */
+    @Query("""DELETE FROM transactions
+        WHERE is_deleted = 0 AND sms_body IS NOT NULL
+        AND sms_sender IS NOT NULL AND sms_sender != '' AND sms_sender NOT LIKE '%PDF%'
+        AND attachments = '' AND (description IS NULL OR TRIM(description) = '')
+        AND id NOT IN (SELECT transaction_id FROM lend_borrow_transactions WHERE transaction_id IS NOT NULL)
+    """)
+    suspend fun deleteRebuildableSmsTransactions()
+
     @Query("DELETE FROM transactions") suspend fun deleteAllTransactions()
     
     @Query("DELETE FROM transactions WHERE is_sample = 1")
@@ -262,6 +277,11 @@ interface TransactionDao {
             startDate: LocalDateTime,
             endDate: LocalDateTime
     ): List<TransactionEntity>
+
+    @Query("""SELECT * FROM transactions WHERE is_deleted = 0
+        AND CAST(amount AS NUMERIC) = CAST(:amount AS NUMERIC)
+        AND date_time BETWEEN :dateStart AND :dateEnd""")
+    suspend fun getTransactionByAmountAndDate(amount: BigDecimal, dateStart: LocalDateTime, dateEnd: LocalDateTime): List<TransactionEntity>
 
     @Query(
             """
