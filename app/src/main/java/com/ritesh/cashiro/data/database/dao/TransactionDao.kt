@@ -278,6 +278,14 @@ interface TransactionDao {
             endDate: LocalDateTime
     ): List<TransactionEntity>
 
+    // CSV identity checks include tombstones so importing an old export cannot restore deleted rows.
+    @Query("""SELECT * FROM transactions
+        WHERE date_time >= :startDate AND date_time < :endDateExclusive""")
+    suspend fun getTransactionsForCsvIdentity(
+        startDate: LocalDateTime,
+        endDateExclusive: LocalDateTime
+    ): List<TransactionEntity>
+
     @Query("""SELECT * FROM transactions WHERE is_deleted = 0
         AND CAST(amount AS NUMERIC) = CAST(:amount AS NUMERIC)
         AND date_time BETWEEN :dateStart AND :dateEnd""")

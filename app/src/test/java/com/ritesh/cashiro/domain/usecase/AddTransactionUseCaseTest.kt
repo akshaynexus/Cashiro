@@ -452,6 +452,9 @@ class AddTransactionUseCaseTest {
         override suspend fun getTransactionsBetweenDatesList(
             startDate: LocalDateTime, endDate: LocalDateTime
         ): List<TransactionEntity> = emptyList()
+        override suspend fun getTransactionsForCsvIdentity(
+            startDate: LocalDateTime, endDateExclusive: LocalDateTime
+        ): List<TransactionEntity> = emptyList()
         override fun getTransactionsByAccount(
             bankName: String, accountLast4: String
         ): Flow<List<TransactionEntity>> = flowOf(emptyList())
