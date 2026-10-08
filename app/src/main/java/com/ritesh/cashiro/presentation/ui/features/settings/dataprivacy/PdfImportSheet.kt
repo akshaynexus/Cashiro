@@ -322,7 +322,7 @@ fun PdfImportSheet(
                                     )
                                 ) {
                                     Text(
-                                        "Override All",
+                                        "Enrich All",
                                         style = MaterialTheme.typography.labelLarge
                                     )
                                 }
@@ -572,7 +572,7 @@ fun TransactionImportItemCard(
                         onClick = { onDecisionChanged(TransactionImportDecision.SKIP) }
                     )
                     DecisionButton(
-                        text = "Override",
+                        text = "Enrich",
                         selected = currentDecision == TransactionImportDecision.OVERRIDE_EXISTING,
                         modifier = Modifier.weight(1f),
                         onClick = { onDecisionChanged(TransactionImportDecision.OVERRIDE_EXISTING) }

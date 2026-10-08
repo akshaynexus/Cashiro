@@ -22,7 +22,7 @@ data class PdfAnalysisResult(
 data class PdfTransactionImportItem(
     val parsed: com.ritesh.parser.core.ParsedTransaction,
     val duplicateMatch: TransactionEntity? = null,
-    val initialDecision: TransactionImportDecision = if (duplicateMatch != null) TransactionImportDecision.SKIP else TransactionImportDecision.IMPORT_NEW
+    val initialDecision: TransactionImportDecision = if (duplicateMatch != null) TransactionImportDecision.OVERRIDE_EXISTING else TransactionImportDecision.IMPORT_NEW
 )
 
 enum class TransactionImportDecision { IMPORT_NEW, SKIP, OVERRIDE_EXISTING }
