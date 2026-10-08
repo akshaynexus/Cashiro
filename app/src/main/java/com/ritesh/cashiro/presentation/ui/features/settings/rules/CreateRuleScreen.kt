@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ritesh.cashiro.domain.model.rule.ActionType
 import com.ritesh.cashiro.domain.model.rule.ConditionOperator
+import com.ritesh.cashiro.domain.model.rule.LogicalOperator
 import com.ritesh.cashiro.domain.model.rule.RuleAction
 import com.ritesh.cashiro.utils.capitalizeFirst
 import com.ritesh.cashiro.domain.model.rule.RuleCondition
@@ -405,6 +406,21 @@ fun CreateRuleScreen(
                         }
 
                         conditions.forEachIndexed { index, condition ->
+                            if (index > 0) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                    LogicalOperator.entries.forEach { connector ->
+                                        FilterChip(
+                                            selected = condition.logicalOperator == connector,
+                                            onClick = {
+                                                conditions = conditions.toMutableList().apply {
+                                                    set(index, condition.copy(logicalOperator = connector))
+                                                }
+                                            },
+                                            label = { Text(connector.name) }
+                                        )
+                                    }
+                                }
+                            }
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -1086,34 +1102,35 @@ fun CreateRuleScreen(
                                 Text(
                                     text = buildString {
                                         append("When ")
-                                        conditions.forEachIndexed { index, condition ->
-                                            if (index > 0) append(" AND ")
-                                            append(
-                                                when (condition.field) {
-                                                    TransactionField.AMOUNT -> "amount"
-                                                    TransactionField.TYPE -> "type"
-                                                    TransactionField.CATEGORY -> "category"
-                                                    TransactionField.SUBCATEGORY -> "subcategory"
-                                                    TransactionField.MERCHANT -> "merchant"
-                                                    TransactionField.SMS_TEXT -> "SMS text"
-                                                    TransactionField.BANK_NAME -> "bank"
-                                                    else -> "field"
-                                                }
-                                            )
-                                            append(" ")
-                                            append(
-                                                when (condition.operator) {
-                                                    ConditionOperator.LESS_THAN -> "is less than"
-                                                    ConditionOperator.GREATER_THAN -> "is greater than"
-                                                    ConditionOperator.EQUALS -> "equals"
-                                                    ConditionOperator.CONTAINS -> "contains"
-                                                    ConditionOperator.STARTS_WITH -> "starts with"
-                                                    else -> "matches"
-                                                }
-                                            )
-                                            append(" ")
-                                            append(condition.value)
-                                        }
+                                        append(conditionPreview(conditions) { condition ->
+                                            buildString {
+                                                append(
+                                                    when (condition.field) {
+                                                        TransactionField.AMOUNT -> "amount"
+                                                        TransactionField.TYPE -> "type"
+                                                        TransactionField.CATEGORY -> "category"
+                                                        TransactionField.SUBCATEGORY -> "subcategory"
+                                                        TransactionField.MERCHANT -> "merchant"
+                                                        TransactionField.SMS_TEXT -> "SMS text"
+                                                        TransactionField.BANK_NAME -> "bank"
+                                                        else -> "field"
+                                                    }
+                                                )
+                                                append(" ")
+                                                append(
+                                                    when (condition.operator) {
+                                                        ConditionOperator.LESS_THAN -> "is less than"
+                                                        ConditionOperator.GREATER_THAN -> "is greater than"
+                                                        ConditionOperator.EQUALS -> "equals"
+                                                        ConditionOperator.CONTAINS -> "contains"
+                                                        ConditionOperator.STARTS_WITH -> "starts with"
+                                                        else -> "matches"
+                                                    }
+                                                )
+                                                append(" ")
+                                                append(condition.value)
+                                            }
+                                        })
                                         append(", ")
                                         append(
                                             when (actionField) {
