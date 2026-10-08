@@ -177,6 +177,10 @@ fun ManageAccountsScreen(
         }
     }
 
+    LaunchedEffect(showEditSheet) {
+        if (showEditSheet) snackbarHostState.currentSnackbarData?.dismiss()
+    }
+
     // Show snackbar messages
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let {
@@ -302,6 +306,32 @@ fun ManageAccountsScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
+                    item {
+                        SectionHeader(title = stringResource(R.string.account_tracking_title), modifier = Modifier.padding(start = 8.dp))
+                        Text(stringResource(R.string.account_tracking_description), style = MaterialTheme.typography.bodySmall)
+                    }
+                    items(uiState.accounts, key = { "tracking_${it.bankName}_${it.currency}_${it.accountLast4}" }) { account ->
+                        val ignored = manageAccountsViewModel.isAccountIgnored(account)
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${account.bankName} • ${account.accountLast4} • ${account.currency}")
+                                Text(stringResource(if (ignored) R.string.account_tracking_ignored else R.string.account_tracking_active), style = MaterialTheme.typography.bodySmall)
+                            }
+                            val ignoredMessage = stringResource(R.string.account_tracking_ignored)
+                            val undoLabel = stringResource(R.string.account_tracking_undo)
+                            TextButton(onClick = {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                manageAccountsViewModel.setAccountIgnored(account, !ignored)
+                                if (!ignored) scope.launch {
+                                    val result = snackbarHostState.showSnackbar(ignoredMessage, actionLabel = undoLabel,
+                                        duration = androidx.compose.material3.SnackbarDuration.Long)
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                        manageAccountsViewModel.setAccountIgnored(account, false)
+                                    }
+                                }
+                            }) { Text(stringResource(if (ignored) R.string.account_tracking_resume else R.string.account_tracking_ignore)) }
+                        }
+                    }
                     // Separate visible and hidden accounts
                     val visibleRegularAccounts = uiState.accounts.filter {
                         !it.isCreditCard && !it.isWallet && !manageAccountsViewModel.isAccountHidden(

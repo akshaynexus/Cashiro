@@ -31,6 +31,7 @@ import androidx.core.content.edit
 data class ManageAccountsUiState(
     val accounts: List<AccountBalanceEntity> = emptyList(),
     val hiddenAccounts: Set<String> = emptySet(),
+    val ignoredAccounts: Set<String> = emptySet(),
     val dismissedDuplicatePairs: Set<String> = emptySet(),
     val balanceHistory: List<AccountBalanceEntity> = emptyList(),
     val linkedCards: Map<String, List<CardEntity>> = emptyMap(),
@@ -71,7 +72,8 @@ constructor(
     private val transactionRepository: TransactionRepository,
     private val database: CashiroDatabase,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val bankAccountMerges: BankAccountMergeStore
+    private val bankAccountMerges: BankAccountMergeStore,
+    private val ignoredAccounts: com.ritesh.cashiro.data.preferences.IgnoredAccountsStore
 ) : ViewModel() {
 
     private val sharedPrefs = context.getSharedPreferences("account_prefs", Context.MODE_PRIVATE)
@@ -92,10 +94,18 @@ constructor(
     init {
         loadAccounts()
         loadHiddenAccounts()
+        viewModelScope.launch { ignoredAccounts.keysFlow.collect { keys -> _uiState.update { it.copy(ignoredAccounts = keys) } } }
         loadMainAccount()
         loadCards()
         initializeDefaultWallet()
         initFormCurrency()
+    }
+
+    fun isAccountIgnored(account: AccountBalanceEntity): Boolean =
+        ignoredAccounts.isIgnored(account.bankName, account.currency, account.accountLast4)
+
+    fun setAccountIgnored(account: AccountBalanceEntity, ignored: Boolean) {
+        ignoredAccounts.setIgnored(account.bankName, account.currency, account.accountLast4, ignored)
     }
 
     private fun initFormCurrency() {
@@ -669,6 +679,7 @@ constructor(
                     }
                 }
 
+                latestBalance?.let { ignoredAccounts.move(it, it.copy(bankName = newBankName, currency = effectiveCurrency)) }
                 // Insert new balance record with updated values
                 accountBalanceRepository.insertBalance(
                     AccountBalanceEntity(
@@ -745,7 +756,7 @@ constructor(
                             transactionId = null, smsSource = null, sourceType = "MERGE"
                         ))
                     }
-                    sources.forEach { bankAccountMerges.onMerge(it, target) }
+                    sources.forEach { ignoredAccounts.move(it, target); bankAccountMerges.onMerge(it, target) }
                     val sourceKeys = sources.map { "${it.bankName}_${it.accountLast4}" }.toSet()
                     val targetKey = "${target.bankName}_${target.accountLast4}"
                     val hidden = _uiState.value.hiddenAccounts - sourceKeys

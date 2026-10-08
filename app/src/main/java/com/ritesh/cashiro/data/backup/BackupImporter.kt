@@ -36,7 +36,8 @@ class BackupImporter @Inject constructor(
     private val database: CashiroDatabase,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val webhookRepository: WebhookRepository,
-    private val bankAccountMerges: BankAccountMergeStore
+    private val bankAccountMerges: BankAccountMergeStore,
+    private val ignoredAccounts: com.ritesh.cashiro.data.preferences.IgnoredAccountsStore
 ) {
     
     private val gson = GsonBuilder()
@@ -725,6 +726,7 @@ class BackupImporter @Inject constructor(
      */
     private suspend fun importPreferences(preferences: PreferencesSnapshot) {
         bankAccountMerges.restore(preferences.app.bankAccountMerges.orEmpty())
+        ignoredAccounts.restore(preferences.app.ignoredAccounts.orEmpty())
         // Theme preferences
         preferences.theme.isDarkThemeEnabled?.let {
             userPreferencesRepository.updateDarkTheme(it)

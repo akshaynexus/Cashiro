@@ -45,6 +45,9 @@ import javax.inject.Inject
 @HiltViewModel
 class TransactionsViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val ignoredAccounts: com.ritesh.cashiro.data.preferences.IgnoredAccountsStore,
+    private val accountMergeStore: com.ritesh.cashiro.data.preferences.BankAccountMergeStore,
+    private val cardRepository: com.ritesh.cashiro.data.repository.CardRepository,
     private val categoryRepository: CategoryRepository,
     private val subcategoryRepository: SubcategoryRepository,
     private val accountBalanceRepository: AccountBalanceRepository,
@@ -818,7 +821,11 @@ class TransactionsViewModel @Inject constructor(
         typeFilter: Set<TransactionTypeFilter>
     ): Flow<List<TransactionEntity>> {
         // Start with the base flow
-        val baseFlow = transactionRepository.getAllTransactions()
+        val baseFlow = combine(transactionRepository.getAllTransactions(), ignoredAccounts.keysFlow,
+            cardRepository.getAllCards(), accountBalanceRepository.getAllLatestBalances()) { transactions, ignored, cards, balances ->
+            val expanded = com.ritesh.cashiro.data.preferences.IgnoredAccountsStore.linkedCardKeys(ignored, cards, balances, accountMergeStore.mappings())
+            transactions.filterNot { ignoredAccounts.matchesKeys(expanded, it.bankName, it.currency, it.accountNumber) }
+        }
         
         // Apply period filter
         val periodFilteredFlow = when (period) {

@@ -64,6 +64,7 @@ class OptimizedSmsReaderWorker @AssistedInject constructor(
     private val llmRepository: LlmRepository,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val unrecognizedSmsRepository: UnrecognizedSmsRepository,
+    private val ignoredAccounts: com.ritesh.cashiro.data.preferences.IgnoredAccountsStore,
     private val smsTransactionProcessor: SmsTransactionProcessor
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -424,7 +425,7 @@ private suspend fun processSubscriptionNotifications(
     // overrides isBalanceUpdateNotification/parseBalanceUpdate in BankParser.
     if (parser.isBalanceUpdateNotification(sms.body)) {
         val balanceUpdateInfo = parser.parseBalanceUpdate(sms.body)
-        if (balanceUpdateInfo != null) {
+        if (balanceUpdateInfo != null && !ignoredAccounts.isIgnored(balanceUpdateInfo.bankName, parser.getCurrency(), balanceUpdateInfo.accountLast4)) {
             try {
                 com.ritesh.cashiro.data.preferences.BankAccountMergeStore.mutationMutex.withLock {
                 accountBalanceRepository.insertBalanceUpdate(

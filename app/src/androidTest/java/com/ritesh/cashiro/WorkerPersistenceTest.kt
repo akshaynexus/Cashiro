@@ -76,7 +76,9 @@ class WorkerPersistenceTest {
         return SmsTransactionProcessor(transactions, balances, MerchantMappingRepository(db.merchantMappingDao()),
             SubscriptionRepository(db.subscriptionDao()), RuleRepositoryImpl(db.ruleDao(), db.ruleApplicationDao(), engine),
             engine, db, context, BalanceUpdateProcessor(CardRepository(db.cardDao()), balances),
-            com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context))
+            com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context),
+            com.ritesh.cashiro.data.preferences.IgnoredAccountsStore(context, com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context)),
+            CardRepository(db.cardDao()))
     }
 
     @Test fun cleanupKeepsEditedMetadataAndConflictingCategoryRows() = runBlocking {
@@ -146,6 +148,69 @@ class WorkerPersistenceTest {
             assertTrue(processor.saveParsedTransaction(input, input.smsBody, SmsTransactionProcessor.ScanContext(emptyMap(), emptyMap())).success)
             assertNotNull(db.accountBalanceDao().getLatestBalance("Example Bank", "1000"))
         } finally { scope.cancel(); db.close() }
+    }
+
+    @Test fun rescanPreservesIgnoredHistoryAndLegacyBalancesThroughConfirmedAliases() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val merges = com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context)
+        val ignored = com.ritesh.cashiro.data.preferences.IgnoredAccountsStore(context, merges)
+        val bank = "Example Rescan Bank"
+        try {
+            merges.remember(bank, "INR", "789", "6789")
+            ignored.setIgnored(bank, "INR", "6789", true)
+            val retained = db.transactionDao().insertTransaction(row("ignored-rescan").copy(bankName = bank, accountNumber = "789"))
+            val removed = db.transactionDao().insertTransaction(row("tracked-rescan").copy(bankName = bank, accountNumber = "9999"))
+            val otherCurrency = db.transactionDao().insertTransaction(row("currency-rescan").copy(bankName = bank, accountNumber = "789", currency = "USD"))
+            db.accountBalanceDao().insertBalance(AccountBalanceEntity(bankName = bank, accountLast4 = "789",
+                balance = BigDecimal("900"), timestamp = date, transactionId = retained, sourceType = "TRANSACTION"))
+            db.accountBalanceDao().insertBalance(AccountBalanceEntity(bankName = bank, accountLast4 = "6789",
+                balance = BigDecimal("900"), timestamp = date, sourceType = null, smsSource = "Synthetic legacy balance"))
+            processor(db, scope).prepareForRescan()
+            assertNotNull(db.transactionDao().getTransactionById(retained))
+            assertNull(db.transactionDao().getTransactionById(removed))
+            assertNull(db.transactionDao().getTransactionById(otherCurrency))
+            assertNotNull(db.accountBalanceDao().getLatestBalance(bank, "789"))
+            assertNotNull(db.accountBalanceDao().getLatestBalance(bank, "6789"))
+            ignored.setIgnored(bank, "INR", "6789", false)
+            processor(db, scope).prepareForRescan()
+            assertNull(db.transactionDao().getTransactionById(retained))
+            assertNull(db.accountBalanceDao().getLatestBalance(bank, "789"))
+            assertNull(db.accountBalanceDao().getLatestBalance(bank, "6789"))
+        } finally {
+            ignored.setIgnored(bank, "INR", "6789", false)
+            merges.forgetAccount(bank, "6789")
+            scope.cancel()
+            db.close()
+        }
+    }
+
+    @Test fun explicitIgnoreBlocksPersistenceAndUndoAllowsSameMessage() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val merges = com.ritesh.cashiro.data.preferences.BankAccountMergeStore(context)
+        val ignored = com.ritesh.cashiro.data.preferences.IgnoredAccountsStore(context, merges)
+        try {
+            val input = ParsedTransaction(BigDecimal("100"), com.ritesh.parser.core.TransactionType.EXPENSE,
+                "Example Shop", null, "6789", BigDecimal("900"), smsBody = "Synthetic ignored alert", sender = "EXAMPLE-T",
+                timestamp = 1767268800000L, bankName = "Example Ignore Bank")
+            val writer = processor(db, scope)
+            val scan = SmsTransactionProcessor.ScanContext(emptyMap(), emptyMap())
+            ignored.setIgnored(input.bankName, input.currency, "6789", true)
+            val skipped = writer.saveParsedTransaction(input, input.smsBody, scan)
+            assertTrue(skipped.blocked)
+            assertFalse(skipped.success)
+            assertFalse(skipped.persistenceFailed)
+            assertNull(db.transactionDao().getTransactionByHash(input.toEntity().transactionHash))
+            assertNull(db.accountBalanceDao().getLatestBalance(input.bankName, "6789"))
+            ignored.setIgnored(input.bankName, input.currency, "6789", false)
+            assertTrue(writer.saveParsedTransaction(input, input.smsBody, scan).success)
+            assertNotNull(db.accountBalanceDao().getLatestBalance(input.bankName, "6789"))
+        } finally {
+            ignored.setIgnored("Example Ignore Bank", "INR", "6789", false)
+            scope.cancel()
+            db.close()
+        }
     }
 
     @Test fun notificationLookupMatchesAmountsWithDifferentDecimalScales() = runBlocking {

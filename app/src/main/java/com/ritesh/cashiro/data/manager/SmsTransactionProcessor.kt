@@ -1,5 +1,8 @@
 package com.ritesh.cashiro.data.manager
 
+import com.ritesh.cashiro.data.preferences.IgnoredAccountsStore
+import com.ritesh.cashiro.data.mapper.accountIdentity
+import com.ritesh.cashiro.data.mapper.isSourceCard
 import android.util.Log
 import androidx.room.withTransaction
 import com.ritesh.cashiro.data.database.CashiroDatabase
@@ -44,7 +47,9 @@ class SmsTransactionProcessor @Inject constructor(
     private val database: CashiroDatabase,
     @ApplicationContext private val context: Context,
     private val balanceUpdateProcessor: BalanceUpdateProcessor,
-    private val bankAccountMerges: BankAccountMergeStore
+    private val bankAccountMerges: BankAccountMergeStore,
+    private val ignoredAccounts: IgnoredAccountsStore,
+    private val cardRepository: com.ritesh.cashiro.data.repository.CardRepository
 ) {
     companion object {
         private const val TAG = "SmsTransactionProcessor"
@@ -151,8 +156,16 @@ class SmsTransactionProcessor @Inject constructor(
 
     suspend fun prepareForRescan() = BankAccountMergeStore.mutationMutex.withLock {
         database.withTransaction {
-            database.transactionDao().deleteRebuildableSmsTransactions()
-            database.accountBalanceDao().deleteRebuildableBalances()
+            // Preserve ignored history: those messages will intentionally not be reimported.
+            // For ambiguous card/account digits preserve both histories rather than lose either.
+            val ignored = IgnoredAccountsStore.linkedCardKeys(ignoredAccounts.keys(),
+                cardRepository.getAllCards().first(), emptyList(), bankAccountMerges.mappings())
+            database.transactionDao().getRebuildableSmsTransactions()
+                .filterNot { ignoredAccounts.matchesKeys(ignored, it.bankName, it.currency, it.accountNumber) }
+                .map { it.id }.chunked(500).forEach { database.transactionDao().deleteTransactionsByIds(it) }
+            database.accountBalanceDao().getRebuildableBalances()
+                .filterNot { ignoredAccounts.matchesKeys(ignored, it.bankName, it.currency, it.accountLast4) }
+                .map { it.id }.chunked(500).forEach { database.accountBalanceDao().deleteBalancesByIds(it) }
             database.ruleApplicationDao().deleteOrphanedApplications()
         }
     }
@@ -181,6 +194,14 @@ class SmsTransactionProcessor @Inject constructor(
 
     private suspend fun saveResolvedTransaction(parsedTransaction: ParsedTransaction, smsBody: String, scanContext: ScanContext?): ProcessingResult {
         return try {
+            val linkedAccount = if (parsedTransaction.isSourceCard) {
+                parsedTransaction.accountIdentity?.let { cardRepository.getCard(parsedTransaction.bankName, it) }
+                    ?.takeIf { it.currency == parsedTransaction.currency }?.accountLast4
+            } else null
+            if (ignoredAccounts.isIgnored(parsedTransaction.bankName, parsedTransaction.currency,
+                    parsedTransaction.accountIdentity, linkedAccount)) {
+                return ProcessingResult(false, reason = "Account ignored", blocked = true)
+            }
             // Convert to entity
             val entity = parsedTransaction.toEntity()
 

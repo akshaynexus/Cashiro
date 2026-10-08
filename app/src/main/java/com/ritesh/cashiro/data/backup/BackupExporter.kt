@@ -32,7 +32,8 @@ class BackupExporter @Inject constructor(
     private val database: CashiroDatabase,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val webhookRepository: WebhookRepository,
-    private val bankAccountMerges: BankAccountMergeStore
+    private val bankAccountMerges: BankAccountMergeStore,
+    private val ignoredAccounts: com.ritesh.cashiro.data.preferences.IgnoredAccountsStore
 ) {
     
     private val gson = GsonBuilder()
@@ -303,7 +304,8 @@ class BackupExporter @Inject constructor(
                     firstLaunchTime = firstLaunchTime,
                     hasShownReviewPrompt = hasShownReviewPrompt,
                     lastReviewPromptTime = lastReviewPromptTime,
-                    bankAccountMerges = if (config.includeAppPreferences) bankAccountMerges.mappings() else null
+                    bankAccountMerges = if (config.includeAppPreferences) bankAccountMerges.mappings() else null,
+                    ignoredAccounts = if (config.includeAppPreferences && config.privacy == ExportPrivacy.FULL) ignoredAccounts.keys() else null
                 ),
                 profile = if (config.includeProfileData) ProfilePreferences(
                     userName = prefs.userName,

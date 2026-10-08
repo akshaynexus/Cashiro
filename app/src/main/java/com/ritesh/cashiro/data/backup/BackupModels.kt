@@ -315,7 +315,9 @@ data class AppPreferences(
     @SerializedName("last_review_prompt_time")
     val lastReviewPromptTime: Long?,
     @SerializedName("bank_account_merges")
-    val bankAccountMerges: Map<String, String>? = null
+    val bankAccountMerges: Map<String, String>? = null,
+    @SerializedName("ignored_accounts")
+    val ignoredAccounts: Set<String>? = null
 )
 
 /**

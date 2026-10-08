@@ -336,6 +336,16 @@ abstract class AccountBalanceDao {
     """)
     abstract suspend fun deleteRebuildableBalances()
 
+    @Query("""SELECT * FROM account_balances
+        WHERE (transaction_id IS NOT NULL AND transaction_id NOT IN (SELECT id FROM transactions))
+        OR (transaction_id IS NULL AND source_type IS NULL AND sms_source IS NOT NULL)
+    """)
+    abstract suspend fun getRebuildableBalances(): List<AccountBalanceEntity>
+
+    @Query("DELETE FROM account_balances WHERE id IN (:ids)")
+    abstract suspend fun deleteBalancesByIds(ids: List<Long>)
+
+
     @Query("DELETE FROM account_balances")
     abstract suspend fun deleteAllBalances()
     

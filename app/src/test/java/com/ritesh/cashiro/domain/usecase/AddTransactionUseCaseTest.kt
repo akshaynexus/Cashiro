@@ -423,6 +423,7 @@ class AddTransactionUseCaseTest {
         override suspend fun deleteTransaction(transaction: TransactionEntity) = Unit
         override suspend fun deleteTransactionById(transactionId: Long) = Unit
         override suspend fun deleteRebuildableSmsTransactions() = Unit
+        override suspend fun getRebuildableSmsTransactions(): List<TransactionEntity> = error("Rescan is not used by this fixture")
         override suspend fun getTransactionByAmountAndDate(amount: BigDecimal, dateStart: LocalDateTime, dateEnd: LocalDateTime): List<TransactionEntity> = emptyList()
         override suspend fun deleteAllTransactions() = Unit
         override suspend fun deleteSampleTransactions() = Unit
@@ -555,6 +556,8 @@ class AddTransactionUseCaseTest {
         override fun getAllLatestBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())
         override fun getAllBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())
         override suspend fun deleteRebuildableBalances() = Unit
+        override suspend fun getRebuildableBalances(): List<AccountBalanceEntity> = error("Rescan is not used by this fixture")
+        override suspend fun deleteBalancesByIds(ids: List<Long>) { balances.values.forEach { rows -> rows.removeAll { it.id in ids } } }
         override suspend fun deleteAllBalances() = Unit
         override suspend fun deleteSampleBalances() = Unit
         override fun getCurrentMonthLatestBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())

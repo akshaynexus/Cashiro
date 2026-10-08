@@ -562,6 +562,8 @@ class AccountBalanceRepositoryTest {
         override fun getAllBalances(): Flow<List<AccountBalanceEntity>> = flowOf(latestBalances.values.toList())
 
         override suspend fun deleteRebuildableBalances() = Unit
+        override suspend fun getRebuildableBalances(): List<AccountBalanceEntity> = error("Rescan is not used by this fixture")
+        override suspend fun deleteBalancesByIds(ids: List<Long>) { balances.removeAll { it.id in ids } }
         override suspend fun deleteAllBalances() = Unit
 
         override suspend fun deleteSampleBalances() = Unit
