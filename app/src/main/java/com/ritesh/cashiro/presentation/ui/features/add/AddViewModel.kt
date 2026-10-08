@@ -138,6 +138,8 @@ constructor(
     private val _subscriptionAttachments = MutableStateFlow<List<String>>(emptyList())
     val subscriptionAttachments: StateFlow<List<String>> = _subscriptionAttachments.asStateFlow()
 
+    private var initializationJob: kotlinx.coroutines.Job? = null
+
     init {
         initializeData()
     }
@@ -147,10 +149,11 @@ constructor(
         updateTransactionSubcategories("Miscellaneous")
         updateSubscriptionSubcategories("Subscription")
 
-        // Pre-select main account
-        viewModelScope.launch {
+        // Pre-select main account before applying an external draft.
+        initializationJob?.cancel()
+        initializationJob = viewModelScope.launch {
             val effectiveCurrency = currencyRepository.effectiveBaseCurrencyCode.first()
-            accounts.filter { it.isNotEmpty() }.first().let { availableAccounts ->
+            accountBalanceRepository.getAllLatestBalances().first().let { availableAccounts ->
                 val mainAccountKey = sharedPrefs.getString("main_account", null)
                 if (mainAccountKey != null) {
                     val mainAccount = availableAccounts.find { 
@@ -167,6 +170,15 @@ constructor(
                 _transactionUiState.update { it.copy(currency = effectiveCurrency) }
                 _subscriptionUiState.update { it.copy(currency = effectiveCurrency) }
             }
+        }
+    }
+
+    suspend fun prefillSharedText(text: String) {
+        initializationJob?.join()
+        val boundedText = text.take(1000)
+        _transactionUiState.update { state ->
+            val amount = SharedTextAmount.amountForCurrency(boundedText, state.currency)
+            state.copy(amount = amount?.toPlainString().orEmpty(), notes = boundedText)
         }
     }
 
