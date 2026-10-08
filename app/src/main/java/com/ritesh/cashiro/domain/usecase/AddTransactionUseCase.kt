@@ -147,6 +147,7 @@ constructor(
                             nextPaymentDate = nextPaymentDate,
                             state = SubscriptionState.ACTIVE,
                             bankName = bankName ?: "Manual Entry",
+                            accountLast4 = accountLast4,
                             category = category,
                             subcategory = subcategory,
                             createdAt = LocalDateTime.now(),

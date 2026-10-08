@@ -525,30 +525,31 @@ class AddTransactionUseCaseTest {
             return id
         }
 
-        override suspend fun getLatestBalanceForCurrency(
-            bankName: String, accountLast4: String, currency: String
-        ): AccountBalanceEntity? = balances[Pair(bankName, accountLast4)]?.filter { it.currency == currency }?.maxByOrNull { it.timestamp }
-
         override suspend fun getLatestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
             val key = Pair(bankName, accountLast4)
             return balances[key]?.maxByOrNull { it.timestamp }
         }
 
         override suspend fun getAccountLast4sEndingWith(bankName: String, suffix: String): List<String> = emptyList()
+        override suspend fun getLatestBalanceForCurrency(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity? =
+            balances[Pair(bankName, accountLast4)]?.filter { it.currency == currency }?.maxByOrNull { it.timestamp }
+
         override suspend fun getLatestBalanceOnOrBefore(
             bankName: String,
             accountLast4: String,
-            timestamp: LocalDateTime
+            timestamp: LocalDateTime,
+            currency: String
         ): AccountBalanceEntity? {
             val key = Pair(bankName, accountLast4)
             return balances[key]
-                ?.filter { !it.timestamp.isAfter(timestamp) }
+                ?.filter { it.currency == currency && !it.timestamp.isAfter(timestamp) }
                 ?.maxByOrNull { it.timestamp }
         }
         override suspend fun getBalancesAfterWithTransactions(
             bankName: String,
             accountLast4: String,
-            timestamp: LocalDateTime
+            timestamp: LocalDateTime,
+            currency: String
         ): List<AccountBalanceTransactionInfo> = emptyList()
         override fun getLatestBalanceFlow(bankName: String, accountLast4: String): Flow<AccountBalanceEntity?> = flowOf(null)
         override fun getAllLatestBalances(): Flow<List<AccountBalanceEntity>> = flowOf(emptyList())
@@ -608,13 +609,14 @@ class AddTransactionUseCaseTest {
             bankName: String,
             accountLast4: String,
             timestamp: LocalDateTime,
-            startingBalance: BigDecimal
+            startingBalance: BigDecimal,
+            currency: String
         ) = Unit
 
         override suspend fun getAccountByLast4(accountLast4: String): AccountBalanceEntity? = null
 
-        override suspend fun getEarliestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
-            return balances[Pair(bankName, accountLast4)]?.minByOrNull { it.timestamp }
+        override suspend fun getEarliestBalance(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity? {
+            return balances[Pair(bankName, accountLast4)]?.filter { it.currency == currency }?.minByOrNull { it.timestamp }
         }
     }
 }

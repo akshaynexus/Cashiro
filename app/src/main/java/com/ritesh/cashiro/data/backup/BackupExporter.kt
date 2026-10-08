@@ -155,11 +155,23 @@ class BackupExporter @Inject constructor(
      */
     private suspend fun createBackup(config: BackupConfiguration): CashiroBackup {
         // Get all database data
-        val transactions = if (config.includeTransactionalData) database.transactionDao().getAllTransactions().first() else emptyList()
+        val ledgerForExport = if (config.includeBudgets && config.includeTransactionalData && config.privacy == ExportPrivacy.FULL) {
+            database.subscriptionPaymentDao().getAll()
+        } else emptyList()
+        val visibleTransactions = if (config.includeTransactionalData) database.transactionDao().getAllTransactions().first() else emptyList()
+        // Payment tombstones remain linked so restoring cannot acknowledge a cycle twice.
+        val transactions = (visibleTransactions + ledgerForExport.mapNotNull {
+            database.transactionDao().getTransactionById(it.transactionId)
+        }).distinctBy { it.id }
         val categories = if (config.includeProfileData) database.categoryDao().getAllCategories().first() else emptyList()
         val cards = if (config.includeProfileData) database.cardDao().getAllCards().first() else emptyList()
         val accountBalances = if (config.includeTransactionalData) database.accountBalanceDao().getAllBalances().first() else emptyList()
         val subscriptions = if (config.includeBudgets) database.subscriptionDao().getAllSubscriptions().first() else emptyList()
+        val subscriptionIds = subscriptions.map { it.id }.toSet()
+        val transactionIds = transactions.map { it.id }.toSet()
+        val subscriptionPayments = if (config.includeBudgets && config.includeTransactionalData && config.privacy == ExportPrivacy.FULL) {
+            ledgerForExport.filter { it.subscriptionId in subscriptionIds && it.transactionId in transactionIds }
+        } else emptyList()
         val merchantMappings = if (config.includeProfileData) database.merchantMappingDao().getAllMappings().first() else emptyList()
         val unrecognizedSms = if (config.includeTransactionalData) database.unrecognizedSmsDao().getAllUnrecognizedSms().first() else emptyList()
         val chatMessages = if (config.includeTransactionalData) database.chatDao().getAllMessages().first() else emptyList()
@@ -257,7 +269,8 @@ class BackupExporter @Inject constructor(
                 webhookProfiles = webhookProfiles,
                 exchangeRates = exchangeRates,
                 lendBorrowPersons = lendBorrowPersons,
-                lendBorrowTransactions = lendBorrowTransactions
+                lendBorrowTransactions = lendBorrowTransactions,
+                subscriptionPayments = subscriptionPayments
             ),
             preferences = PreferencesSnapshot(
                 theme = ThemePreferences(

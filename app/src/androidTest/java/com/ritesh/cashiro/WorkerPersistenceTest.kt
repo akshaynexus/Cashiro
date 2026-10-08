@@ -103,6 +103,29 @@ class WorkerPersistenceTest {
         } finally { scope.cancel(); db.close() }
     }
 
+    @Test fun duplicateCleanupPreservesTransactionAcknowledgedBySubscriptionLedger() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val paidId = db.transactionDao().insertTransaction(row("subscription-paid").copy(
+                bankName = "State Bank of India", reference = "123456789012", balanceAfter = null
+            ))
+            val betterId = db.transactionDao().insertTransaction(row("subscription-bank-confirmation").copy(
+                reference = "123456789012", balanceAfter = BigDecimal("900")
+            ))
+            val subId = db.subscriptionDao().insertSubscription(SubscriptionEntity(
+                merchantName = "Example Shop", amount = BigDecimal("100"), nextPaymentDate = date.toLocalDate()
+            ))
+            db.subscriptionPaymentDao().insert(SubscriptionPaymentEntity(
+                subId, date.toLocalDate(), date.toLocalDate(), paidId, "synthetic-payment-confirmation"
+            ))
+            assertEquals(0, processor(db, scope).cleanupDuplicates())
+            assertNotNull(db.transactionDao().getTransactionById(paidId))
+            assertNotNull(db.transactionDao().getTransactionById(betterId))
+            assertEquals(paidId, db.subscriptionPaymentDao().forSmsHash("synthetic-payment-confirmation")!!.transactionId)
+        } finally { scope.cancel(); db.close() }
+    }
+
     @Test fun balanceWriteFailureRollsBackTransactionAndCanBeRetried() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, CashiroDatabase::class.java).build()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

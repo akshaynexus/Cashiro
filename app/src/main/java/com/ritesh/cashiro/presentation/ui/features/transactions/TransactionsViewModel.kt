@@ -662,7 +662,7 @@ class TransactionsViewModel @Inject constructor(
                     if (linkedEntry != null) {
                         val newBalance = (linkedEntry.balance - oldEffect + newEffect).max(BigDecimal.ZERO)
                         accountBalanceRepository.updateBalance(linkedEntry.copy(balance = newBalance))
-                        accountBalanceRepository.recalculateBalancesAfter(bankName, accountLast4, timestamp, newBalance)
+                        accountBalanceRepository.recalculateBalancesAfter(bankName, accountLast4, timestamp, newBalance, txn.currency)
                     }
                 }
             }

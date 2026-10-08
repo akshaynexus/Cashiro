@@ -391,7 +391,7 @@ class PNBBankParser : BaseIndianBankParser() {
         override val nextDeductionDate: String?,
         override val merchant: String,
         override val umn: String?,
-        val accountLast4: String? = null
+        override val accountLast4: String? = null
     ) : MandateInfo {
         override val dateFormat = "dd-MMM-yy"
     }

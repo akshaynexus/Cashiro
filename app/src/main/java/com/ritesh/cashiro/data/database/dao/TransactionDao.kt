@@ -161,6 +161,7 @@ interface TransactionDao {
         AND sms_sender IS NOT NULL AND sms_sender != '' AND sms_sender NOT LIKE '%PDF%'
         AND attachments = '' AND (description IS NULL OR TRIM(description) = '')
         AND id NOT IN (SELECT transaction_id FROM lend_borrow_transactions WHERE transaction_id IS NOT NULL)
+        AND id NOT IN (SELECT transaction_id FROM subscription_payments)
     """)
     suspend fun deleteRebuildableSmsTransactions()
 

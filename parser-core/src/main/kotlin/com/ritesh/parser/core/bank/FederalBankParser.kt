@@ -555,7 +555,8 @@ class FederalBankParser : BankParser() {
                 amount = amount,
                 nextDeductionDate = startDate,
                 merchant = merchant,
-                umn = umn
+                umn = umn,
+            accountLast4 = extractAccountLast4(message)
         )
     }
 
@@ -604,7 +605,8 @@ class FederalBankParser : BankParser() {
                 amount = amount,
                 nextDeductionDate = dueDate,
                 merchant = merchant,
-                umn = null
+                umn = null,
+                accountLast4 = extractAccountLast4(message)
         )
     }
 
@@ -612,7 +614,8 @@ class FederalBankParser : BankParser() {
             override val amount: BigDecimal,
             override val nextDeductionDate: String?,
             override val merchant: String,
-            override val umn: String?
+            override val umn: String?,
+        override val accountLast4: String? = null
     ) : MandateInfo {
         override val dateFormat = "dd-MM-yyyy"
     }

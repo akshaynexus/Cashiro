@@ -474,7 +474,8 @@ class HDFCBankParser : BankParser() {
             amount = amount,
             nextDeductionDate = dateStr,
             merchant = merchant,
-            umn = umn
+            umn = umn,
+            accountLast4 = extractAccountLast4(message)
         )
     }
 
@@ -604,7 +605,8 @@ class HDFCBankParser : BankParser() {
             amount = amount,
             nextDeductionDate = debitDate,
             merchant = merchant,
-            umn = null // Future debits don't have UMN
+            umn = null,
+            accountLast4 = extractAccountLast4(message)
         )
     }
 
@@ -615,7 +617,8 @@ class HDFCBankParser : BankParser() {
         override val amount: BigDecimal,
         override val nextDeductionDate: String?,
         override val merchant: String,
-        override val umn: String?
+        override val umn: String?,
+        override val accountLast4: String? = null
     ) : MandateInfo {
         // HDFC uses dd/MM/yy format
         override val dateFormat = "dd/MM/yy"

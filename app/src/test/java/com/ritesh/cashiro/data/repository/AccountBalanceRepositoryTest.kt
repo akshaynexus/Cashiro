@@ -496,37 +496,40 @@ class AccountBalanceRepositoryTest {
             return id
         }
 
-        override suspend fun getLatestBalanceForCurrency(
-            bankName: String, accountLast4: String, currency: String
-        ): AccountBalanceEntity? = (balances + latestBalances.values).filter { it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency }.maxByOrNull { it.timestamp }
-
         override suspend fun getLatestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
             return latestBalances[accountKey(bankName, accountLast4)]
                 ?: balances.filter { it.bankName == bankName && it.accountLast4 == accountLast4 }
                     .maxByOrNull { it.timestamp }
         }
 
+        override suspend fun getLatestBalanceForCurrency(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity? =
+            (balances + latestBalances.values).filter {
+                it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency
+            }.maxByOrNull { it.timestamp }
+
         override suspend fun getLatestBalanceOnOrBefore(
             bankName: String,
             accountLast4: String,
-            timestamp: LocalDateTime
+            timestamp: LocalDateTime,
+            currency: String
         ): AccountBalanceEntity? {
-            return balanceAtOrBefore
+            return balanceAtOrBefore?.takeIf { it.currency == currency }
                 ?: balances.filter {
-                    it.bankName == bankName && it.accountLast4 == accountLast4 && !it.timestamp.isAfter(timestamp)
+                    it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency && !it.timestamp.isAfter(timestamp)
                 }.maxByOrNull { it.timestamp }
         }
 
         override suspend fun getBalancesAfterWithTransactions(
             bankName: String,
             accountLast4: String,
-            timestamp: LocalDateTime
+            timestamp: LocalDateTime,
+            currency: String
         ): List<AccountBalanceTransactionInfo> {
             if (balancesAfter.isNotEmpty()) {
                 return balancesAfter
             }
             return balances.filter {
-                it.bankName == bankName && it.accountLast4 == accountLast4 && it.timestamp.isAfter(timestamp)
+                it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency && it.timestamp.isAfter(timestamp)
             }.sortedBy { it.timestamp }
              .map { bal ->
                  val tx = bal.transactionId?.let { transactionMap[it] }
@@ -619,8 +622,8 @@ class AccountBalanceRepositoryTest {
 
         override suspend fun getAccountByLast4(accountLast4: String): AccountBalanceEntity? = null
 
-        override suspend fun getEarliestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
-            return balances.filter { it.bankName == bankName && it.accountLast4 == accountLast4 }
+        override suspend fun getEarliestBalance(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity? {
+            return balances.filter { it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency }
                 .minByOrNull { it.timestamp }
         }
     }

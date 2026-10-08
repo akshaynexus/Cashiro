@@ -81,7 +81,7 @@ class PortRegressionTest {
             assertNull(db.transactionDao().getTransactionById(3)?.toBankName)
             val rowId = db.transactionDao().insertTransaction(transaction().copy(fromBankName = null, toBankName = null))
             assertNull(db.transactionDao().getTransactionById(rowId)?.toBankName)
-            assertEquals(63, db.openHelper.readableDatabase.version)
+            assertEquals(64, db.openHelper.readableDatabase.version)
         } finally { db.close(); context.deleteDatabase(name) }
     }
 

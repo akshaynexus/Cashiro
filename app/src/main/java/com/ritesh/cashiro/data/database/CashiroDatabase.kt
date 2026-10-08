@@ -22,6 +22,7 @@ import com.ritesh.cashiro.data.database.dao.MerchantMappingDao
 import com.ritesh.cashiro.data.database.dao.RuleApplicationDao
 import com.ritesh.cashiro.data.database.dao.RuleDao
 import com.ritesh.cashiro.data.database.dao.SubcategoryDao
+import com.ritesh.cashiro.data.database.dao.SubscriptionPaymentDao
 import com.ritesh.cashiro.data.database.dao.SubscriptionDao
 import com.ritesh.cashiro.data.database.dao.BudgetDao
 import com.ritesh.cashiro.data.database.dao.TransactionDao
@@ -43,6 +44,7 @@ import com.ritesh.cashiro.data.database.entity.MerchantMappingEntity
 import com.ritesh.cashiro.data.database.entity.RuleApplicationEntity
 import com.ritesh.cashiro.data.database.entity.RuleEntity
 import com.ritesh.cashiro.data.database.entity.SubcategoryEntity
+import com.ritesh.cashiro.data.database.entity.SubscriptionPaymentEntity
 import com.ritesh.cashiro.data.database.entity.SubscriptionEntity
 import com.ritesh.cashiro.data.database.entity.TransactionEntity
 import com.ritesh.cashiro.data.database.entity.UnrecognizedSmsEntity
@@ -65,6 +67,7 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
         [
             TransactionEntity::class,
             SubscriptionEntity::class,
+            SubscriptionPaymentEntity::class,
             ChatMessage::class,
             ChatSession::class,
             MerchantMappingEntity::class,
@@ -85,7 +88,7 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
             com.ritesh.cashiro.data.database.entity.LendBorrowPersonEntity::class,
             com.ritesh.cashiro.data.database.entity.LendBorrowTransactionEntity::class
         ],
-        version = 63,
+        version = 64,
     exportSchema = true,
     autoMigrations =
         [
@@ -117,6 +120,7 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
 abstract class CashiroDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun subscriptionPaymentDao(): SubscriptionPaymentDao
     abstract fun chatDao(): ChatDao
     abstract fun chatSessionDao(): ChatSessionDao
     abstract fun merchantMappingDao(): MerchantMappingDao
@@ -180,8 +184,24 @@ abstract class CashiroDatabase : RoomDatabase() {
                 MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51, MIGRATION_51_52,
                 MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56,
                 MIGRATION_56_57, MIGRATION_57_58, MIGRATION_58_59, MIGRATION_59_60,
-                MIGRATION_60_61, MIGRATION_61_62
+                MIGRATION_60_61, MIGRATION_61_62, MIGRATION_63_64
             )
+
+        val MIGRATION_63_64 = object : Migration(63, 64) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE subscriptions ADD COLUMN account_last4 TEXT")
+                db.execSQL("""CREATE TABLE IF NOT EXISTS subscription_payments (
+                    subscription_id INTEGER NOT NULL, scheduled_date TEXT NOT NULL,
+                    payment_date TEXT NOT NULL, transaction_id INTEGER NOT NULL, sms_hash TEXT, marked_date TEXT NOT NULL,
+                    PRIMARY KEY(subscription_id, scheduled_date),
+                    FOREIGN KEY(subscription_id) REFERENCES subscriptions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )""")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_payments_transaction_id ON subscription_payments(transaction_id)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_payments_sms_hash ON subscription_payments(sms_hash)")
+                db.execSQL("DROP INDEX IF EXISTS index_account_balances_bank_name_account_last4_timestamp")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_account_balances_bank_name_account_last4_currency_timestamp ON account_balances(bank_name, account_last4, currency, timestamp)")
+            }
+        }
 
         val MIGRATION_1_2 =
                 object : Migration(1, 2) {

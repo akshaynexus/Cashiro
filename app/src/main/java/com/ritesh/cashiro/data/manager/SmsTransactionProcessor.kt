@@ -164,6 +164,7 @@ class SmsTransactionProcessor @Inject constructor(
                 var keeper = cluster.keeper
                 cluster.duplicates.forEach duplicate@ { duplicate ->
                     if (database.lendBorrowDao().getTransactionByWalletId(duplicate.id) != null) return@duplicate
+                    if (database.subscriptionPaymentDao().forTransaction(duplicate.id) != null) return@duplicate
                     val enriched = TransactionDeduplication.mergeUserMetadata(keeper, duplicate) ?: return@duplicate
                     if (enriched != keeper) transactionRepository.updateTransaction(enriched)
                     keeper = enriched
@@ -274,18 +275,18 @@ class SmsTransactionProcessor @Inject constructor(
                 Log.d(TAG, "Applied ${ruleApplications.size} rules to transaction")
             }
 
+            val resolvedForSubscription = accountBalanceRepository.resolveEntityAccountNumber(entityWithRules, parsedTransaction)
+            SubscriptionPaymentReconciliation.reconcile(database, accountBalanceRepository, resolvedForSubscription)?.let { id ->
+                return ProcessingResult(false, transactionId = id, reason = "Subscription payment already recorded")
+            }
+
             // Check if this transaction matches an active subscription
             val matchedSubscription = subscriptionRepository.matchTransactionToSubscription(
-                entityWithRules.merchantName,
-                entityWithRules.amount
+                resolvedForSubscription
             )
 
             val finalEntity = if (matchedSubscription != null) {
                 Log.d(TAG, "Transaction matched to active subscription: ${matchedSubscription.merchantName}")
-                subscriptionRepository.updateNextPaymentDateAfterCharge(
-                    matchedSubscription.id,
-                    entityWithRules.dateTime.toLocalDate()
-                )
                 entityWithRules.copy(isRecurring = true)
             } else {
                 entityWithRules
@@ -315,6 +316,10 @@ class SmsTransactionProcessor @Inject constructor(
                         it.copy(transactionId = rowId.toString())
                     }
                     ruleRepository.saveRuleApplications(applicationsWithId)
+                }
+
+                if (matchedSubscription != null) {
+                    SubscriptionPaymentReconciliation.recordCharge(database, matchedSubscription, rowId, finalEntityForInsert)
                 }
 
                 // Process balance updates

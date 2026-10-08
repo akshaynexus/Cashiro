@@ -185,9 +185,10 @@ class TransactionRepository @Inject constructor(
     }
 
     private suspend fun reverseBalanceForDeletion(transaction: TransactionEntity) {
+        if (transaction.transactionHash.startsWith("manual_balance_adjustment_v1_")) return
         val bankName = transaction.bankName ?: return
         val accountLast4 = transaction.accountNumber ?: return
-        val latestBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4) ?: return
+        val latestBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4, transaction.currency) ?: return
         val currentBalance = latestBalance.balance
 
         val reversedBalance = when (transaction.transactionType) {
@@ -215,9 +216,10 @@ class TransactionRepository @Inject constructor(
     }
 
     private suspend fun applyBalanceForTransaction(transaction: TransactionEntity) {
+        if (transaction.transactionHash.startsWith("manual_balance_adjustment_v1_")) return
         val bankName = transaction.bankName ?: return
         val accountLast4 = transaction.accountNumber ?: return
-        val latestBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4) ?: return
+        val latestBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4, transaction.currency) ?: return
         val currentBalance = latestBalance.balance
 
         val newBalance = when (transaction.transactionType) {

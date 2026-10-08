@@ -491,15 +491,13 @@ constructor(
                         )
                     }
                     
-                    // Pre-select account if possible
-                    accounts.filter { it.isNotEmpty() }.first().let { availableAccounts ->
-                        val matchedAccount = availableAccounts.find { 
-                            it.bankName == subscription.bankName
-                        }
-                        if (matchedAccount != null) {
-                            _subscriptionUiState.update { it.copy(selectedAccount = matchedAccount) }
-                        }
-                    }
+                    // Funding accounts are identified by bank, suffix and currency.
+                    val matchedAccount = if (subscription.bankName != null && subscription.accountLast4 != null) {
+                        accountBalanceRepository.getLatestBalance(
+                            subscription.bankName, subscription.accountLast4, subscription.currency
+                        )
+                    } else null
+                    _subscriptionUiState.update { it.copy(selectedAccount = matchedAccount) }
                     
                     // Update subcategories for the loaded category
                     updateSubscriptionSubcategories(subscription.category ?: "Subscription")
@@ -661,6 +659,7 @@ constructor(
                             category = state.category,
                             subcategory = state.subcategory,
                             bankName = state.selectedAccount?.bankName,
+                            accountLast4 = state.selectedAccount?.accountLast4,
                             currency = state.currency,
                             smsBody = state.notes.takeIf { it.isNotBlank() },
                             updatedAt = java.time.LocalDateTime.now()
@@ -703,6 +702,7 @@ constructor(
                             category = state.category,
                             subcategory = state.subcategory,
                             bankName = state.selectedAccount?.bankName,
+                            accountLast4 = state.selectedAccount?.accountLast4,
                             autoRenewal = false, // Not implemented yet
                             paymentReminder = false, // Not implemented yet
                             currency = state.currency,

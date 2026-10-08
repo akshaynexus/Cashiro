@@ -295,7 +295,7 @@ class TransactionDetailViewModel @Inject constructor(
             val transaction = transactionRepository.getTransactionById(transactionId)
             _uiState.update { it.copy(transaction = transaction) }
             val accountIconName = transaction?.let { txn ->
-                accountBalanceRepository.getLatestBalance(txn.bankName ?: "", txn.accountNumber ?: "")?.iconName
+                accountBalanceRepository.getLatestBalance(txn.bankName ?: "", txn.accountNumber ?: "", txn.currency)?.iconName
             }
             _uiState.update { it.copy(accountIconName = accountIconName) }
             transaction?.let {
@@ -309,10 +309,7 @@ class TransactionDetailViewModel @Inject constructor(
 
     private suspend fun findLinkedSubscription(transaction: TransactionEntity) {
         if (transaction.isRecurring) {
-            val linked = subscriptionRepository.matchTransactionToSubscription(
-                transaction.merchantName,
-                transaction.amount
-            )
+            val linked = subscriptionRepository.matchTransactionToSubscription(transaction)
             _uiState.update { it.copy(subscription = linked) }
         } else {
             _uiState.update { it.copy(subscription = null) }
@@ -833,10 +830,7 @@ class TransactionDetailViewModel @Inject constructor(
 
     private suspend fun syncSubscriptionForTransaction(transaction: TransactionEntity) {
         if (transaction.isRecurring) {
-            val existing = subscriptionRepository.matchTransactionToSubscription(
-                transaction.merchantName,
-                transaction.amount
-            )
+            val existing = subscriptionRepository.matchTransactionToSubscription(transaction)
 
             val nextPaymentDate = SubscriptionUtils.calculateNextPaymentDate(
                 (transaction.dateTime ?: LocalDateTime.now()).toLocalDate(),
@@ -849,6 +843,7 @@ class TransactionDetailViewModel @Inject constructor(
                 category = transaction.category,
                 subcategory = transaction.subcategory,
                 bankName = transaction.bankName,
+                accountLast4 = transaction.accountNumber,
                 currency = transaction.currency,
                 billingCycle = transaction.billingCycle,
                 state = SubscriptionState.ACTIVE,
@@ -860,6 +855,7 @@ class TransactionDetailViewModel @Inject constructor(
                     nextPaymentDate = nextPaymentDate,
                     state = SubscriptionState.ACTIVE,
                     bankName = transaction.bankName,
+                    accountLast4 = transaction.accountNumber,
                     category = transaction.category,
                     subcategory = transaction.subcategory,
                     currency = transaction.currency,
@@ -870,10 +866,7 @@ class TransactionDetailViewModel @Inject constructor(
             subscriptionRepository.insertSubscription(subscription)
         } else {
             // Find existing matching subscription and hide it
-            val existing = subscriptionRepository.matchTransactionToSubscription(
-                transaction.merchantName,
-                transaction.amount
-            )
+            val existing = subscriptionRepository.matchTransactionToSubscription(transaction)
             if (existing != null) {
                 subscriptionRepository.hideSubscription(existing.id)
             }
@@ -912,7 +905,7 @@ class TransactionDetailViewModel @Inject constructor(
         if (linkedEntry != null) {
             val newBalance = (linkedEntry.balance - oldEffect + newEffect).max(BigDecimal.ZERO)
             accountBalanceRepository.updateBalance(linkedEntry.copy(balance = newBalance))
-            accountBalanceRepository.recalculateBalancesAfter(bankName, accountLast4, timestamp, newBalance)
+            accountBalanceRepository.recalculateBalancesAfter(bankName, accountLast4, timestamp, newBalance, oldTransaction.currency)
         }
     }
 
@@ -942,7 +935,7 @@ class TransactionDetailViewModel @Inject constructor(
         delta: BigDecimal,
         currency: String
     ) {
-        val currentBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4)
+        val currentBalance = accountBalanceRepository.getLatestBalance(bankName, accountLast4, currency)
         val newBalance = (currentBalance?.balance ?: BigDecimal.ZERO) + delta
         accountBalanceRepository.insertBalance(
             AccountBalanceEntity(

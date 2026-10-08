@@ -41,9 +41,10 @@ class AccountBalanceRepository @Inject constructor(
     suspend fun getLatestBalanceOnOrBefore(
         bankName: String,
         accountLast4: String,
-        timestamp: LocalDateTime
+        timestamp: LocalDateTime,
+        currency: String
     ): AccountBalanceEntity? {
-        return accountBalanceDao.getLatestBalanceOnOrBefore(bankName, accountLast4, timestamp)
+        return accountBalanceDao.getLatestBalanceOnOrBefore(bankName, accountLast4, timestamp, currency)
     }
 
     suspend fun resolveAccountLast4(bankName: String, accountLast4: String, currency: String = "INR"): String {
@@ -113,10 +114,11 @@ class AccountBalanceRepository @Inject constructor(
         creditLimit: BigDecimal? = null,
         timestamp: LocalDateTime,
         transactionId: Long?,
-        isCreditCard: Boolean = false
+        isCreditCard: Boolean = false,
+        currency: String
     ) {
         if (bankName != null && accountLast4 != null && (balance != null || creditLimit != null)) {
-            val latest = getLatestBalance(bankName, accountLast4)
+            val latest = getLatestBalance(bankName, accountLast4, currency)
             val balanceEntity = AccountBalanceEntity(
                 bankName = bankName,
                 accountLast4 = accountLast4,
@@ -125,6 +127,7 @@ class AccountBalanceRepository @Inject constructor(
                 transactionId = transactionId,
                 creditLimit = creditLimit ?: latest?.creditLimit,
                 isCreditCard = isCreditCard || (latest?.isCreditCard ?: false),
+                currency = currency,
                 iconResId = latest?.iconResId ?: 0,
                 iconName = latest?.iconName ?: "",
                 isWallet = latest?.isWallet ?: false,
@@ -190,7 +193,7 @@ class AccountBalanceRepository @Inject constructor(
         sourceType: String? = null,
         currency: String = "INR"
     ): Long {
-        val latest = getLatestBalance(bankName, accountLast4)
+        val latest = getLatestBalance(bankName, accountLast4, currency)
         val balanceEntity = AccountBalanceEntity(
             bankName = bankName,
             accountLast4 = accountLast4,
@@ -258,8 +261,9 @@ class AccountBalanceRepository @Inject constructor(
         bankName: String,
         accountLast4: String,
         timestamp: LocalDateTime,
-        startingBalance: BigDecimal
+        startingBalance: BigDecimal,
+        currency: String
     ) {
-        accountBalanceDao.recalculateBalancesAfter(bankName, accountLast4, timestamp, startingBalance)
+        accountBalanceDao.recalculateBalancesAfter(bankName, accountLast4, timestamp, startingBalance, currency)
     }
 }
