@@ -74,7 +74,7 @@ class SubscriptionsViewModel @Inject constructor(
                         val converted = if (sub.currency == targetCurrency) {
                             sub.amount
                         } else {
-                            currencyConversionService.convertAmount(
+                            currencyConversionService.convertAmountOrNull(
                                 amount = sub.amount,
                                 fromCurrency = sub.currency,
                                 toCurrency = targetCurrency

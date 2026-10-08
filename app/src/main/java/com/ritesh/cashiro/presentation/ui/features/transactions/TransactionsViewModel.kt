@@ -364,9 +364,9 @@ class TransactionsViewModel @Inject constructor(
                      
                      // Calculate converted amounts for shown transactions if transaction currency differs from base (main) currency
                      val converted = currencyFilteredTransactions.filter { !it.currency.equals(baseCurrencyCode, ignoreCase = true) }
-                         .associate { tx ->
-                             tx.id to currencyConversionService.convertAmount(tx.amount, tx.currency, baseCurrencyCode)
-                         }
+                         .mapNotNull { tx ->
+                        currencyConversionService.convertAmountOrNull(tx.amount, tx.currency, baseCurrencyCode)?.let { tx.id to it }
+                    }.toMap()
 
                      // Create person mapping
                      val personMap = persons.associateBy { it.id }

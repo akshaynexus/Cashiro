@@ -332,7 +332,7 @@ class TransactionDetailViewModel @Inject constructor(
             )
         ) {
             // Convert the amount to the primary currency
-            val converted = currencyConversionService.convertAmount(
+            val converted = currencyConversionService.convertAmountOrNull(
                 amount = transaction.amount,
                 fromCurrency = transaction.currency,
                 toCurrency = primaryCurrency
