@@ -73,3 +73,20 @@ The follow-up comparison uses PennyWise upstream `dabae2a0` and Cashiro upstream
 The missing concrete parser set is: Apollo, Awash, BSF, Banco Agricola, Banco Cuscatlan, Banco Promerica, Bank of Abyssinia, bKash, Chase UK, Citizens Bank, D360, GTBank, Jana Small Finance Bank, Lumbini Bikash, Machchhapuchhre, Moniepoint, NDB, National Bank of Egypt, National Savings Bank, Nations Trust Bank, Nepal Bank, Nepal SBI, Pasargad, Pluxee, Siket, Standard Chartered Nepal, Standard Chartered Nigeria, Trading 212, VFD and ZamZam. The El Salvador base parser is an additional shared helper, not a thirty-first bank.
 
 All new or adapted fixtures must use synthetic examples. Parser presence is checked through the factory; app integration must also account for notification-only providers and wallets without account suffixes. Verification results are recorded in the PR description after the combined gate runs.
+
+## Additional follow-ups requested after the expanded port
+
+These remain separate commits on the same PR, following the five expansion commits above.
+
+| Port | PennyWise evidence | Cashiro adaptation |
+|---|---|---|
+| Slice SMS | `07a05b76`, `3edb24d1`, `64d020eb`, `82e41e3b`, `bb97c82c` | Modern bank alerts, SLCBNK sender, successful card/UPI/AutoPay formats and request rejection; retains legacy explicit-card classification. |
+| Currency selectors | #243 (`a98a92b8`, `f13eb380`), #626 (`6b883600`) | Offline/custom catalog, selected currency visibility, search and scrolling; preserves native Cashiro selectors. |
+| Rule correctness | `c55630fc`, `03976f77` | Left-to-right AND/OR evaluation and grouped preview, conservative type filtering, numeric amount equality. |
+| Standalone rule sharing | `2ac58471` | Versioned validated JSON, bounded file reading, atomic import, Cashiro subcategory actions and privacy-safe errors. |
+| Shared-text drafts | `a9992f7b` | Inbound plain-text share opens an editable draft after onboarding/app-lock checks; never saves automatically or assumes foreign-currency conversion. |
+| Account-backed subscription payments | `0fa5a7cd` | Atomic per-cycle ledger, exact funding account, existing-payment linking, later SMS reconciliation, backup ID remapping and migration 63→64. Balance mutations and uniqueness include currency. |
+| Explicit account tracking exclusions | `ccbd530a`, `4f1d43b6` | Separate from Hide; skip new transaction/balance messages, filter transaction listing, retain ignored history during rescans, reversible controls and backup persistence. Existing overview totals and mandate reminders retain their current behavior. |
+| Balance discrepancy adjustment | `7028e958` | Bank/currency/transfer-qualified detection, revalidation before atomic adjustment, duplicate/tombstone protection and unchanged explicit balance anchors. |
+
+New regression data is synthetic. Exact cumulative-commit build/test results are recorded in the PR description.

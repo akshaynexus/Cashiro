@@ -1330,4 +1330,14 @@
     <string name="csv_import_error">Unable to import this CSV. Check that it is a valid PennyWise export.</string>
     <string name="import_pdf_statement_sub">Scan GPay or PhonePe PDF statements</string>
     <string name="pdf_support_warning_title">Only PDFs from GPay and PhonePe are currently supported.</string>
+    <string name="balance_discrepancy_title">Balance difference</string>
+    <string name="balance_discrepancy_values">Expected %1$s · Bank reported %2$s</string>
+    <string name="balance_discrepancy_explanation">Review for missing or duplicate transactions. Recording an adjustment explains the difference without changing the bank balance.</string>
+    <string name="balance_adjustment_expense">Record %1$s untracked expense</string>
+    <string name="balance_adjustment_income">Record %1$s untracked income</string>
+    <string name="balance_adjustment_added">Balance adjustment recorded</string>
+    <string name="balance_adjustment_exists">An adjustment was already recorded for this transaction</string>
+    <string name="balance_adjustment_changed">The balance difference changed. Review the updated details.</string>
+    <string name="balance_adjustment_failed">Could not record the balance adjustment</string>
+    <string name="balance_discrepancy_notification">Balance difference detected. Review this transaction.</string>
 </resources>

@@ -10,6 +10,7 @@ import com.ritesh.cashiro.data.database.CashiroDatabase
 import com.ritesh.cashiro.data.preferences.BankAccountMergeStore
 import kotlinx.coroutines.sync.withLock
 import android.content.Context
+import com.ritesh.cashiro.R
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -60,6 +61,8 @@ import javax.inject.Inject
 @HiltViewModel
 class TransactionDetailViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val detectBalanceDiscrepancy: com.ritesh.cashiro.domain.usecase.DetectBalanceDiscrepancyUseCase,
+    private val addBalanceAdjustment: com.ritesh.cashiro.domain.usecase.AddBalanceAdjustmentUseCase,
     private val database: CashiroDatabase,
     private val merchantMappingRepository: MerchantMappingRepository,
     private val categoryRepository: CategoryRepository,
@@ -293,7 +296,8 @@ class TransactionDetailViewModel @Inject constructor(
     fun loadTransaction(transactionId: Long) {
         viewModelScope.launch {
             val transaction = transactionRepository.getTransactionById(transactionId)
-            _uiState.update { it.copy(transaction = transaction) }
+            _uiState.update { it.copy(transaction = transaction, balanceDiscrepancy = null) }
+            refreshBalanceDiscrepancy(transaction)
             val accountIconName = transaction?.let { txn ->
                 accountBalanceRepository.getLatestBalance(txn.bankName ?: "", txn.accountNumber ?: "", txn.currency)?.iconName
             }
@@ -303,6 +307,44 @@ class TransactionDetailViewModel @Inject constructor(
                 calculateConvertedAmount(it)
                 findLinkedSubscription(it)
                 loadLinkedLendBorrow(it.id)
+            }
+        }
+    }
+
+    private suspend fun refreshBalanceDiscrepancy(transaction: TransactionEntity?) {
+        val discrepancy = try {
+            transaction?.let { detectBalanceDiscrepancy.execute(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        _uiState.update {
+            if (it.transaction?.id == transaction?.id) it.copy(balanceDiscrepancy = discrepancy) else it
+        }
+    }
+
+    fun recordBalanceAdjustment() {
+        val state = _uiState.value
+        if (state.isAddingBalanceAdjustment || state.isEditMode) return
+        val discrepancy = state.balanceDiscrepancy ?: return
+        _uiState.update { it.copy(isAddingBalanceAdjustment = true) }
+        viewModelScope.launch {
+            try {
+                val result = addBalanceAdjustment.execute(discrepancy)
+                refreshBalanceDiscrepancy(_uiState.value.transaction)
+                val message = when (result) {
+                    com.ritesh.cashiro.domain.usecase.AddBalanceAdjustmentUseCase.Result.ADDED -> R.string.balance_adjustment_added
+                    com.ritesh.cashiro.domain.usecase.AddBalanceAdjustmentUseCase.Result.ALREADY_RECORDED -> R.string.balance_adjustment_exists
+                    com.ritesh.cashiro.domain.usecase.AddBalanceAdjustmentUseCase.Result.CHANGED -> R.string.balance_adjustment_changed
+                }
+                _uiState.update { it.copy(errorMessage = context.getString(message)) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _uiState.update { it.copy(errorMessage = context.getString(R.string.balance_adjustment_failed)) }
+            } finally {
+                _uiState.update { it.copy(isAddingBalanceAdjustment = false) }
             }
         }
     }
