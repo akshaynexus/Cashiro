@@ -76,7 +76,7 @@ class BankAccountMergeStore @Inject constructor(@ApplicationContext context: Con
         }
 
         fun resolve(parsed: ParsedTransaction, mappings: Map<String, String>): ParsedTransaction {
-            if (parsed.isSourceCard) return parsed
+            if (parsed.isSourceCard || parsed.isMobileWallet) return parsed
             val suffix = parsed.accountLast4 ?: return parsed
             return parsed.copy(accountLast4 = resolveSuffix(parsed.bankName, parsed.currency, suffix, mappings))
         }

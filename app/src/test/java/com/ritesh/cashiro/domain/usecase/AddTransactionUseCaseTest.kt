@@ -525,6 +525,10 @@ class AddTransactionUseCaseTest {
             return id
         }
 
+        override suspend fun getLatestBalanceForCurrency(
+            bankName: String, accountLast4: String, currency: String
+        ): AccountBalanceEntity? = balances[Pair(bankName, accountLast4)]?.filter { it.currency == currency }?.maxByOrNull { it.timestamp }
+
         override suspend fun getLatestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
             val key = Pair(bankName, accountLast4)
             return balances[key]?.maxByOrNull { it.timestamp }

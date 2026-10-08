@@ -28,6 +28,15 @@ abstract class AccountBalanceDao {
     abstract suspend fun getLatestBalance(bankName: String, accountLast4: String): AccountBalanceEntity?
 
     @Query("""
+        SELECT * FROM account_balances
+        WHERE bank_name = :bankName AND account_last4 = :accountLast4 AND currency = :currency
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """)
+    abstract suspend fun getLatestBalanceForCurrency(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity?
+
+
+    @Query("""
         SELECT DISTINCT account_last4 FROM account_balances
         WHERE bank_name = :bankName
         AND LENGTH(account_last4) >= 4
@@ -98,7 +107,8 @@ abstract class AccountBalanceDao {
         creditLimit: BigDecimal?,
         isCreditCard: Boolean,
         smsSource: String?,
-        currency: String
+        currency: String,
+        isWallet: Boolean = false
     ): Long {
         val latest = getLatestBalance(bankName, accountLast4)
         val previous = getLatestBalanceOnOrBefore(bankName, accountLast4, timestamp)
@@ -141,7 +151,7 @@ abstract class AccountBalanceDao {
                 currency = currency,
                 iconResId = previousForBalance?.iconResId ?: latest?.iconResId ?: 0,
                 iconName = previousForBalance?.iconName ?: latest?.iconName ?: "",
-                isWallet = previousForBalance?.isWallet ?: latest?.isWallet ?: false,
+                isWallet = isWallet || (previousForBalance?.isWallet ?: latest?.isWallet ?: false),
                 color = previousForBalance?.color ?: latest?.color ?: "#33B5E5"
             )
         )

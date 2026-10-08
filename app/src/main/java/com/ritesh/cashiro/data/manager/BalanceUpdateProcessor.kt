@@ -6,6 +6,7 @@ import com.ritesh.parser.core.ParsedTransaction
 import com.ritesh.cashiro.data.database.entity.CardType
 import com.ritesh.cashiro.data.database.entity.TransactionEntity
 import com.ritesh.cashiro.data.database.entity.TransactionType
+import com.ritesh.cashiro.data.mapper.accountIdentity
 import com.ritesh.cashiro.data.mapper.toEntityType
 import com.ritesh.cashiro.data.mapper.isSourceCard
 import com.ritesh.cashiro.data.repository.AccountBalanceRepository
@@ -31,7 +32,7 @@ class BalanceUpdateProcessor @Inject constructor(
         entity: TransactionEntity,
         rowId: Long
     ) {
-        val sourceAccount = if (parsedTransaction.isSourceCard) parsedTransaction.accountLast4 else
+        val sourceAccount = if (parsedTransaction.isSourceCard || parsedTransaction.isMobileWallet) parsedTransaction.accountIdentity else
             parsedTransaction.accountLast4?.let {
                 accountBalanceRepository.resolveAccountLast4(parsedTransaction.bankName, it, parsedTransaction.currency)
             }
@@ -109,7 +110,8 @@ class BalanceUpdateProcessor @Inject constructor(
                 creditLimit = parsedTransaction.creditLimit,
                 isCreditCard = isCreditCard,
                 smsSource = sanitizeSmsSource(parsedTransaction),
-                currency = parsedTransaction.currency
+                currency = parsedTransaction.currency,
+                isWallet = parsedTransaction.isMobileWallet
             )
 
             if (BuildConfig.DEBUG) {

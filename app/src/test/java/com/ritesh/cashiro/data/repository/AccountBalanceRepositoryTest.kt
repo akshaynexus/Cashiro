@@ -496,6 +496,10 @@ class AccountBalanceRepositoryTest {
             return id
         }
 
+        override suspend fun getLatestBalanceForCurrency(
+            bankName: String, accountLast4: String, currency: String
+        ): AccountBalanceEntity? = (balances + latestBalances.values).filter { it.bankName == bankName && it.accountLast4 == accountLast4 && it.currency == currency }.maxByOrNull { it.timestamp }
+
         override suspend fun getLatestBalance(bankName: String, accountLast4: String): AccountBalanceEntity? {
             return latestBalances[accountKey(bankName, accountLast4)]
                 ?: balances.filter { it.bankName == bankName && it.accountLast4 == accountLast4 }

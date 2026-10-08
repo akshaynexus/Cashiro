@@ -34,6 +34,10 @@ class AccountBalanceRepository @Inject constructor(
         return accountBalanceDao.getLatestBalance(bankName, accountLast4)
     }
 
+    suspend fun getLatestBalance(bankName: String, accountLast4: String, currency: String): AccountBalanceEntity? {
+        return accountBalanceDao.getLatestBalanceForCurrency(bankName, accountLast4, currency)
+    }
+
     suspend fun getLatestBalanceOnOrBefore(
         bankName: String,
         accountLast4: String,
@@ -53,7 +57,7 @@ class AccountBalanceRepository @Inject constructor(
         entity: TransactionEntity,
         parsedTransaction: ParsedTransaction
     ): TransactionEntity {
-        if (!parsedTransaction.isFromCard && parsedTransaction.type != com.ritesh.parser.core.TransactionType.CREDIT && entity.bankName != null && entity.accountNumber != null) {
+        if (!parsedTransaction.isMobileWallet && !parsedTransaction.isFromCard && parsedTransaction.type != com.ritesh.parser.core.TransactionType.CREDIT && entity.bankName != null && entity.accountNumber != null) {
             return entity.copy(
                 accountNumber = resolveAccountLast4(entity.bankName, entity.accountNumber, entity.currency)
             )
@@ -157,7 +161,8 @@ class AccountBalanceRepository @Inject constructor(
         creditLimit: BigDecimal?,
         isCreditCard: Boolean,
         smsSource: String?,
-        currency: String
+        currency: String,
+        isWallet: Boolean = false
     ): Long {
         return accountBalanceDao.insertTransactionBalance(
             bankName = bankName,
@@ -170,7 +175,8 @@ class AccountBalanceRepository @Inject constructor(
             creditLimit = creditLimit,
             isCreditCard = isCreditCard,
             smsSource = smsSource,
-            currency = currency
+            currency = currency,
+            isWallet = isWallet
         )
     }
 

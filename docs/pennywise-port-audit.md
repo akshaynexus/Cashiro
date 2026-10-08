@@ -1,6 +1,6 @@
 # PennyWise contribution audit and Cashiro port
 
-Compared Cashiro upstream `40a387fd` against all 31 user-authored PennyWise PRs. The shared ancestor is `498e098fb5abc24a3d71595c25baf57fb892bffd` (2025-12-14, v2.15.43); Cashiro's first separate commit is `037ae5aa` (2025-12-20). Ancestry and equivalent behavior are distinguished below. The port is restricted to PNB/account repair, SMS scanning, GPay PDF parsing/deduplication/statement enrichment, and the subsequently requested full South Indian Bank parser updates.
+Compared Cashiro upstream `40a387fd` against all 31 user-authored PennyWise PRs. The shared ancestor is `498e098fb5abc24a3d71595c25baf57fb892bffd` (2025-12-14, v2.15.43); Cashiro's first separate commit is `037ae5aa` (2025-12-20). Ancestry and equivalent behavior are distinguished below. The initial port covered PNB/account repair, SMS scanning, GPay PDF parsing/deduplication/statement enrichment, and South Indian Bank parser updates. The same PR now also includes the follow-up scope listed below; earlier scope decisions in the historical table apply to the initial port.
 
 | PennyWise PR | Audit and decision |
 |---|---|
@@ -23,7 +23,7 @@ Compared Cashiro upstream `40a387fd` against all 31 user-authored PennyWise PRs.
 | [#242](https://github.com/sarim2000/pennywiseai-tracker/pull/242) | Present: transaction editor already selects source and target accounts. Add bank-qualified transfer identities only where required by account repair. |
 | [#243](https://github.com/sarim2000/pennywiseai-tracker/pull/243) | Outside selected scope: currency-selector UI. Preserve Cashiro currency preferences and existing supported-currency infrastructure. |
 | [#244](https://github.com/sarim2000/pennywiseai-tracker/pull/244) | Outside selected scope: Slice parser already exists, but this PR is not claimed as fully equivalent. No unrelated parser replacement. |
-| [#245](https://github.com/sarim2000/pennywiseai-tracker/pull/245) | Missing/outside selected scope: no CRED parser registered in Cashiro. Not part of the requested three feature groups. |
+| [#245](https://github.com/sarim2000/pennywiseai-tracker/pull/245) | Already present on reinspection: CredParser exists and is registered in Cashiro. No duplicate CRED implementation is needed; this corrects the initial audit. |
 | [#246](https://github.com/sarim2000/pennywiseai-tracker/pull/246) | Present: backup already includes rules when app preferences are selected. Extend that existing preference boundary for confirmed account mappings. |
 | [#247](https://github.com/sarim2000/pennywiseai-tracker/pull/247) | Outside selected scope: budget-group ordering UI. No budget UI changes. |
 | [#248](https://github.com/sarim2000/pennywiseai-tracker/pull/248) | Closed unmerged GPay proposal; superseded by merged #338 and maintainer fixes. Use their final matching/keeper behavior. |
@@ -55,3 +55,21 @@ Compared Cashiro upstream `40a387fd` against all 31 user-authored PennyWise PRs.
 - Count queries were already narrow projections. The port adds a COUNT-only SMS fast path with provider-compatible fallback; RCS deliberately keeps an exact sender-filtered count using only tr_id and cached parser recognition. Unknown RCS senders are rejected before reading message parts. SMS and RCS readers run concurrently; parser workers use bounded queues and CPU dispatch, while ledger persistence remains atomic and serialized.
 
 All new regression fixtures use synthetic banks, merchants, suffixes and references. No production SMS or device logs are included.
+
+
+## Expanded port scope (same Cashiro PR)
+
+The follow-up comparison uses PennyWise upstream `dabae2a0` and Cashiro upstream `40a387fd`, including the initial port through `920d3f53`.
+
+| Area | PennyWise sources | Cashiro adaptation and verification focus |
+|---|---|---|
+| Currency correctness and refresh performance | #672 `5c563e04`, #556 `5555a10e` | Nullable conversion for missing rates; aggregate callers must skip unavailable conversions and retain native labels for individual values. Preserve Cashiro custom rates and share refresh work across concurrent requests. |
+| Category rename safety | #858 `62f0d4c0` | Atomic updates across Cashiro transactions, merchant mappings, subscriptions, budget limits, rules and Lend/Borrow category references. Preserve subcategory IDs and unknown rule JSON fields. |
+| Notification category actions | #709 `0b5b24ab` | Distinct PendingIntent identity for each full transaction ID and button slot. |
+| Recent parser corrections | #836 `45a41b4d`, #863 `8f11627f`, #869 `f4d919b3`, #775 `221964e5` | UCO amount/balance separation; HDFC interest and PIXEL; shared reminder rejection; Karnataka payee/masked reference; Federal sender compatibility. Keep Cashiro's existing supported formats. |
+| Statement/CSV import | Paytm #618 `c3d368bc`, Slice #667 `ce6eb1ab`, CSV #627 `cea54c5e` | Register new PDF parsers in the existing preview/import flow and expose CSV import with idempotent persistence. Preserve Cashiro-specific entity fields and avoid raw financial logs. |
+| Expanded bank coverage | Latest registered parsers at `dabae2a0` | Add the 30 missing concrete parsers, required regional helpers, factory registration, notification aliases where needed, wallet routing and currency display support. |
+
+The missing concrete parser set is: Apollo, Awash, BSF, Banco Agricola, Banco Cuscatlan, Banco Promerica, Bank of Abyssinia, bKash, Chase UK, Citizens Bank, D360, GTBank, Jana Small Finance Bank, Lumbini Bikash, Machchhapuchhre, Moniepoint, NDB, National Bank of Egypt, National Savings Bank, Nations Trust Bank, Nepal Bank, Nepal SBI, Pasargad, Pluxee, Siket, Standard Chartered Nepal, Standard Chartered Nigeria, Trading 212, VFD and ZamZam. The El Salvador base parser is an additional shared helper, not a thirty-first bank.
+
+All new or adapted fixtures must use synthetic examples. Parser presence is checked through the factory; app integration must also account for notification-only providers and wallets without account suffixes. Verification results are recorded in the PR description after the combined gate runs.
