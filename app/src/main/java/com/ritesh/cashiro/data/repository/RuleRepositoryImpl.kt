@@ -45,6 +45,10 @@ class RuleRepositoryImpl @Inject constructor(
         return ruleDao.getRuleById(ruleId)?.let { entityToRule(it) }
     }
 
+    override suspend fun insertRules(rules: List<TransactionRule>) {
+        ruleDao.insertRules(rules.map { ruleToEntity(it) })
+    }
+
     override suspend fun insertRule(rule: TransactionRule) {
         ruleDao.insertRule(ruleToEntity(rule))
     }

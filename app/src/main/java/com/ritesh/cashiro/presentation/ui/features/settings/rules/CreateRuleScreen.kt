@@ -552,17 +552,15 @@ fun CreateRuleScreen(
                                     }
 
                                     // Operator selector
-                                    val operators = when (condition.field) {
-                                        TransactionField.AMOUNT -> listOf(
-                                            ConditionOperator.LESS_THAN to "<",
-                                            ConditionOperator.GREATER_THAN to ">",
-                                            ConditionOperator.EQUALS to "="
-                                        )
-                                        else -> listOf(
-                                            ConditionOperator.CONTAINS to "contains",
-                                            ConditionOperator.EQUALS to "equals",
-                                            ConditionOperator.STARTS_WITH to "starts with"
-                                        )
+                                    val operators = com.ritesh.cashiro.domain.model.rule.supportedOperators(condition.field).map { operator ->
+                                        operator to when (operator) {
+                                            ConditionOperator.LESS_THAN -> "<"
+                                            ConditionOperator.GREATER_THAN -> ">"
+                                            ConditionOperator.EQUALS -> if (condition.field == TransactionField.AMOUNT) "=" else "equals"
+                                            ConditionOperator.CONTAINS -> "contains"
+                                            ConditionOperator.STARTS_WITH -> "starts with"
+                                            else -> operator.name.lowercase().replace('_', ' ')
+                                        }
                                     }
 
                                     FlowRow(
