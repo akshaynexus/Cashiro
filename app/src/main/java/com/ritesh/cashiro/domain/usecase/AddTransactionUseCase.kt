@@ -61,6 +61,8 @@ constructor(
                         accountNumber = accountLast4,
                         fromAccount = accountLast4,
                         toAccount = targetAccountLast4,
+                        fromBankName = bankName,
+                        toBankName = targetAccountBankName,
                         balanceAfter = null,
                         transactionHash = transactionHash,
                         isRecurring = isRecurring,

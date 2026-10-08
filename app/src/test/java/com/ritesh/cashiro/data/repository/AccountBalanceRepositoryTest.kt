@@ -189,13 +189,13 @@ class AccountBalanceRepositoryTest {
     }
 
     @Test
-    fun resolveAccountLast4ExpandsUniqueSameBankSuffix() = runTest {
+    fun resolveAccountLast4DoesNotInferAnUnconfirmedSuffix() = runTest {
         val dao = FakeAccountBalanceDao(
             suffixMatches = mapOf("Indian Overseas Bank" to mapOf("99" to listOf("1999")))
         )
         val repository = AccountBalanceRepository(dao, ContextWrapper(null))
 
-        assertEquals("1999", repository.resolveAccountLast4("Indian Overseas Bank", "99"))
+        assertEquals("99", repository.resolveAccountLast4("Indian Overseas Bank", "99"))
     }
 
     @Test

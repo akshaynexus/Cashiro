@@ -1,5 +1,6 @@
 package com.ritesh.cashiro.data.backup
 
+import com.ritesh.cashiro.data.preferences.BankAccountMergeStore
 import android.content.Context
 import android.net.Uri
 import android.util.Log
@@ -34,7 +35,8 @@ class BackupImporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: CashiroDatabase,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val webhookRepository: WebhookRepository
+    private val webhookRepository: WebhookRepository,
+    private val bankAccountMerges: BankAccountMergeStore
 ) {
     
     private val gson = GsonBuilder()
@@ -708,6 +710,7 @@ class BackupImporter @Inject constructor(
      * Import user preferences
      */
     private suspend fun importPreferences(preferences: PreferencesSnapshot) {
+        bankAccountMerges.restore(preferences.app.bankAccountMerges.orEmpty())
         // Theme preferences
         preferences.theme.isDarkThemeEnabled?.let {
             userPreferencesRepository.updateDarkTheme(it)

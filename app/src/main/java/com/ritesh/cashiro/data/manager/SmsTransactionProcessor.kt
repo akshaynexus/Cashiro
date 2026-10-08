@@ -1,6 +1,13 @@
 package com.ritesh.cashiro.data.manager
 
 import android.util.Log
+import androidx.room.withTransaction
+import com.ritesh.cashiro.data.database.CashiroDatabase
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.ritesh.cashiro.data.preferences.BankAccountMergeStore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 import com.ritesh.parser.core.ParsedTransaction
 import com.ritesh.parser.core.bank.BankParserFactory
 import com.ritesh.cashiro.data.database.entity.TransactionEntity
@@ -28,6 +35,8 @@ class SmsTransactionProcessor @Inject constructor(
     private val subscriptionRepository: SubscriptionRepository,
     private val ruleRepository: RuleRepository,
     private val ruleEngine: RuleEngine,
+    private val database: CashiroDatabase,
+    @ApplicationContext private val context: Context,
     private val balanceUpdateProcessor: BalanceUpdateProcessor
 ) {
     companion object {
@@ -64,6 +73,18 @@ class SmsTransactionProcessor @Inject constructor(
                 reason = "No parser found for sender: $sender"
             )
 
+            val mandateParser = parsers.filterIsInstance<com.ritesh.parser.core.bank.PNBBankParser>()
+                .firstOrNull { it.isUPIMandateNotification(body) }
+            if (mandateParser != null) {
+                val mandate = mandateParser.parseUPIMandateSubscription(body)
+                if (mandate != null && timestamp >= System.currentTimeMillis() - java.time.Duration.ofDays(30).toMillis()) {
+                    BankAccountMergeStore.mutationMutex.withLock {
+                        subscriptionRepository.createOrUpdateFromMandate(mandate, mandateParser.getBankName(), body)
+                    }
+                }
+                return ProcessingResult(false, reason = "Mandate notification")
+            }
+
             // Parse the SMS — try each matching parser in order, return first result
             val parsedTransaction = parsers.firstNotNullOfOrNull { parser ->
                 parser.parse(body, sender, timestamp)
@@ -76,6 +97,8 @@ class SmsTransactionProcessor @Inject constructor(
 
             // Save the transaction
             return saveParsedTransaction(parsedTransaction, body)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error processing SMS", e)
             return ProcessingResult(false, reason = e.message)
@@ -93,7 +116,11 @@ class SmsTransactionProcessor @Inject constructor(
     suspend fun saveParsedTransaction(
         parsedTransaction: ParsedTransaction,
         smsBody: String
-    ): ProcessingResult {
+    ): ProcessingResult = BankAccountMergeStore.mutationMutex.withLock {
+        database.withTransaction { saveResolvedTransaction(BankAccountMergeStore(context).resolve(parsedTransaction), smsBody) }
+    }
+
+    private suspend fun saveResolvedTransaction(parsedTransaction: ParsedTransaction, smsBody: String): ProcessingResult {
         return try {
             // Convert to entity
             val entity = parsedTransaction.toEntity()
@@ -214,6 +241,8 @@ class SmsTransactionProcessor @Inject constructor(
                 Log.d(TAG, "Transaction already exists (duplicate): ${entity.transactionHash}")
                 return ProcessingResult(false, reason = "Duplicate transaction")
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error saving transaction: ${e.message}")
             return ProcessingResult(false, reason = e.message)

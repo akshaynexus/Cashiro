@@ -1319,4 +1319,8 @@
         <item quantity="other">Delete %1$d records?</item>
     </plurals>
 
+    <string name="duplicate_account_title">Possible duplicate account</string>
+    <string name="duplicate_account_message">%1$s reports account •%2$s and •%3$s. If these are the same account, merge their transactions and remember the longer suffix for future messages. The target account balance is kept.</string>
+    <string name="duplicate_account_merge">Merge and remember</string>
+    <string name="duplicate_account_keep">Keep separate</string>
 </resources>

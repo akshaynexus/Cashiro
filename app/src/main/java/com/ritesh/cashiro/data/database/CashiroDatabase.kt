@@ -85,7 +85,7 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
             com.ritesh.cashiro.data.database.entity.LendBorrowPersonEntity::class,
             com.ritesh.cashiro.data.database.entity.LendBorrowTransactionEntity::class
         ],
-        version = 62,
+        version = 63,
     exportSchema = true,
     autoMigrations =
         [
@@ -109,7 +109,8 @@ import com.ritesh.cashiro.data.database.entity.WebhookProfileEntity
             AutoMigration(from = 44, to = 45, spec = Migration44To45::class),
             AutoMigration(from = 45, to = 46, spec = Migration45To46::class),
             AutoMigration(from = 46, to = 47, spec = Migration46To47::class),
-            AutoMigration(from = 47, to = 48)
+            AutoMigration(from = 47, to = 48),
+            AutoMigration(from = 62, to = 63, spec = Migration62To63::class)
         ]
 )
 @TypeConverters(Converters::class)
@@ -152,28 +153,7 @@ abstract class CashiroDatabase : RoomDatabase() {
                             CashiroDatabase::class.java,
                             DATABASE_NAME
                         )
-                            .addMigrations(
-                                MIGRATION_12_14,
-                                MIGRATION_13_14,
-                                MIGRATION_14_15,
-                                MIGRATION_20_21,
-                                MIGRATION_21_22,
-                                MIGRATION_22_23,
-                                MIGRATION_29_30,
-            MIGRATION_48_49,
-            MIGRATION_49_50,
-            MIGRATION_50_51,
-            MIGRATION_51_52,
-            MIGRATION_52_53,
-            MIGRATION_53_54,
-            MIGRATION_54_55,
-MIGRATION_55_56,
-                                MIGRATION_56_57,
-                                MIGRATION_57_58,
-                                MIGRATION_58_59,
-                                MIGRATION_59_60,
-                                MIGRATION_60_61
-                            )
+                            .addMigrations(*ALL_MIGRATIONS)
                             .build()
                     INSTANCE = instance
                     instance
@@ -192,6 +172,17 @@ MIGRATION_55_56,
          * Manual migration from version 1 to 2. Example of how to write manual migrations when
          * auto-migration isn't sufficient.
          */
+        /** Shared manual edges for the Hilt and receiver entry points; Room adds auto edges. */
+        val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(
+                MIGRATION_12_14, MIGRATION_13_14, MIGRATION_14_15,
+                MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_29_30,
+                MIGRATION_48_49, MIGRATION_49_50, MIGRATION_50_51, MIGRATION_51_52,
+                MIGRATION_52_53, MIGRATION_53_54, MIGRATION_54_55, MIGRATION_55_56,
+                MIGRATION_56_57, MIGRATION_57_58, MIGRATION_58_59, MIGRATION_59_60,
+                MIGRATION_60_61, MIGRATION_61_62
+            )
+
         val MIGRATION_1_2 =
                 object : Migration(1, 2) {
                     override fun migrate(db: SupportSQLiteDatabase) {
@@ -1669,6 +1660,23 @@ class Migration46To47 : AutoMigrationSpec {
         
         subcategoryMappings.forEach { (name, iconName) ->
             db.execSQL("UPDATE subcategories SET icon_name = ?, default_icon_name = ? WHERE name = ? AND is_system = 1", arrayOf(iconName, iconName, name))
+        }
+    }
+}
+
+/** Backfill only bank identities evidenced by the owner or unambiguous same-currency balances. */
+class Migration62To63 : AutoMigrationSpec {
+    override fun onPostMigrate(db: SupportSQLiteDatabase) {
+        for (leg in listOf("from", "to")) {
+            db.execSQL("""
+                UPDATE transactions SET ${leg}_bank_name = CASE
+                    WHEN account_number = ${leg}_account AND from_account IS NOT to_account THEN bank_name
+                    ELSE (SELECT CASE WHEN COUNT(DISTINCT b.bank_name) = 1 THEN MIN(b.bank_name) END
+                          FROM account_balances b
+                          WHERE b.account_last4 = transactions.${leg}_account AND b.currency = transactions.currency)
+                END
+                WHERE transaction_type = 'TRANSFER' AND ${leg}_account IS NOT NULL
+            """.trimIndent())
         }
     }
 }

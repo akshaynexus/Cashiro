@@ -1,5 +1,6 @@
 package com.ritesh.cashiro.data.backup
 
+import com.ritesh.cashiro.data.preferences.BankAccountMergeStore
 import android.content.Context
 import android.os.Build
 import com.google.gson.GsonBuilder
@@ -30,7 +31,8 @@ class BackupExporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val database: CashiroDatabase,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val webhookRepository: WebhookRepository
+    private val webhookRepository: WebhookRepository,
+    private val bankAccountMerges: BankAccountMergeStore
 ) {
     
     private val gson = GsonBuilder()
@@ -287,7 +289,8 @@ class BackupExporter @Inject constructor(
                     hasShownScanTutorial = prefs.hasShownScanTutorial,
                     firstLaunchTime = firstLaunchTime,
                     hasShownReviewPrompt = hasShownReviewPrompt,
-                    lastReviewPromptTime = lastReviewPromptTime
+                    lastReviewPromptTime = lastReviewPromptTime,
+                    bankAccountMerges = if (config.includeAppPreferences) bankAccountMerges.mappings() else null
                 ),
                 profile = if (config.includeProfileData) ProfilePreferences(
                     userName = prefs.userName,

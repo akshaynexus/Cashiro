@@ -1,7 +1,14 @@
 package com.ritesh.cashiro.presentation.ui.features.transactions
 
+import com.ritesh.cashiro.data.mapper.withTransferAccount
+import com.ritesh.cashiro.data.mapper.transferBalanceChanges
+
 import com.ritesh.cashiro.utils.SubscriptionUtils
 
+import androidx.room.withTransaction
+import com.ritesh.cashiro.data.database.CashiroDatabase
+import com.ritesh.cashiro.data.preferences.BankAccountMergeStore
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -53,6 +60,7 @@ import javax.inject.Inject
 @HiltViewModel
 class TransactionDetailViewModel @Inject constructor(
     private val transactionRepository: TransactionRepository,
+    private val database: CashiroDatabase,
     private val merchantMappingRepository: MerchantMappingRepository,
     private val categoryRepository: CategoryRepository,
     private val subcategoryRepository: SubcategoryRepository,
@@ -260,15 +268,18 @@ class TransactionDetailViewModel @Inject constructor(
     val selectedAccount: StateFlow<AccountBalanceEntity?> = _uiState.map { state ->
         val transaction = state.editableTransaction
         if (transaction == null) return@map null
-        availableAccounts.value.find {
-            it.bankName == transaction.bankName && it.accountLast4 == transaction.accountNumber
+        availableAccounts.value.singleOrNull {
+            if (it.currency != transaction.currency) return@singleOrNull false
+            if (transaction.transactionType == TransactionType.TRANSFER) {
+                it.accountLast4 == transaction.fromAccount && (transaction.fromBankName == null || it.bankName == transaction.fromBankName)
+            } else it.bankName == transaction.bankName && it.accountLast4 == transaction.accountNumber
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val targetAccount: StateFlow<AccountBalanceEntity?> = _uiState.map { state ->
         val transaction = state.editableTransaction
         if (transaction == null) return@map null
-        availableAccounts.value.find { it.accountLast4 == transaction.toAccount }
+        availableAccounts.value.singleOrNull { it.currency == transaction.currency && it.accountLast4 == transaction.toAccount && (transaction.toBankName == null || it.bankName == transaction.toBankName) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
 
@@ -593,18 +604,17 @@ class TransactionDetailViewModel @Inject constructor(
         _uiState.update { state ->
             val current = state.editableTransaction
             state.copy(
-                editableTransaction = current?.copy(
-                    bankName = account?.bankName ?: "Manual Entry",
-                    accountNumber = account?.accountLast4,
-                    currency = account?.currency ?: current.currency
-                ),
+                editableTransaction = if (current?.transactionType == TransactionType.TRANSFER) {
+                    current.withTransferAccount(account?.accountLast4, account?.bankName, incoming = false)
+                        .copy(currency = account?.currency ?: current.currency)
+                } else current?.copy(bankName = account?.bankName ?: "Manual Entry", accountNumber = account?.accountLast4, currency = account?.currency ?: current.currency),
                 accountIconName = account?.iconName // Update the icon name in state too
             )
         }
     }
 
     fun updateTransactionTargetAccount(account: AccountBalanceEntity?) {
-        _uiState.update { it.copy(editableTransaction = it.editableTransaction?.copy(toAccount = account?.accountLast4)) }
+        _uiState.update { it.copy(editableTransaction = it.editableTransaction?.withTransferAccount(account?.accountLast4, account?.bankName, incoming = true)) }
 
         // Update category if type is TRANSFER
         _uiState.value.editableTransaction?.let { txn ->
@@ -661,12 +671,11 @@ class TransactionDetailViewModel @Inject constructor(
                     attachments = attachmentService.joinAttachments(_editableAttachments.value)
                 )
 
-                transactionRepository.updateTransaction(normalizedTransaction)
-
-                // Handle Balance Updates
-                val originalTransaction = state.transaction
-                if (originalTransaction != null) {
-                    updateAccountBalances(originalTransaction, normalizedTransaction)
+                BankAccountMergeStore.mutationMutex.withLock {
+                    database.withTransaction {
+                        transactionRepository.updateTransaction(normalizedTransaction)
+                        state.transaction?.let { updateAccountBalances(it, normalizedTransaction) }
+                    }
                 }
 
                 // Sync with subscriptions if recurring
@@ -911,30 +920,11 @@ class TransactionDetailViewModel @Inject constructor(
         oldTransaction: TransactionEntity,
         newTransaction: TransactionEntity
     ) {
-        val oldAmount = oldTransaction.amount
-        val newAmount = newTransaction.amount
-
-        // source account: -amount effect
-        val sourceDelta = -(newAmount - oldAmount)
-        if (sourceDelta != BigDecimal.ZERO && oldTransaction.bankName != null && oldTransaction.accountNumber != null) {
-            applyBalanceWithDelta(oldTransaction.bankName, oldTransaction.accountNumber, sourceDelta, newTransaction.currency)
-        }
-
-        // target account: +amount effect
-        val oldTarget = oldTransaction.toAccount
-        val newTarget = newTransaction.toAccount
-        if (oldTarget != null) {
-            findAccountByLast4(oldTarget)?.let { target ->
-                val targetDelta = newAmount - oldAmount
-                if (targetDelta != BigDecimal.ZERO) {
-                    applyBalanceWithDelta(target.bankName, target.accountLast4, targetDelta, newTransaction.currency)
-                }
-            }
-        }
-        if (newTarget != null && newTarget != oldTarget) {
-            findAccountByLast4(newTarget)?.let { target ->
-                applyBalanceWithDelta(target.bankName, target.accountLast4, newAmount, newTransaction.currency)
-            }
+        val accounts = accountBalanceRepository.getAllLatestBalances().first()
+        transferBalanceChanges(oldTransaction, newTransaction, accounts) { message ->
+            throw IllegalStateException(message)
+        }.forEach { (account, delta) ->
+            applyBalanceWithDelta(account.bank, account.suffix, delta, account.currency)
         }
     }
 
@@ -971,8 +961,5 @@ class TransactionDetailViewModel @Inject constructor(
         )
     }
 
-    private suspend fun findAccountByLast4(last4: String): AccountBalanceEntity? {
-        return accountBalanceRepository.getAllLatestBalances().first()
-            .find { it.accountLast4 == last4 }
-    }
+
 }

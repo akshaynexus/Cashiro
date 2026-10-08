@@ -384,6 +384,8 @@ class AddTransactionUseCaseTest {
     }
 
     private class FakeTransactionDao : TransactionDao {
+        override suspend fun getAccountTransferLegRefIds(bankName: String, sourceAccountLast4: String): List<Long> = error("Not used by this fixture")
+        override suspend fun retargetTransferLegRefs(transactionIds: List<Long>, sourceBankName: String, targetBankName: String, sourceAccountLast4: String, targetAccountLast4: String, updatedAt: LocalDateTime): Int = error("Not used by this fixture")
         var insertedTransactions = mutableListOf<TransactionEntity>()
         private var nextId = 1L
 

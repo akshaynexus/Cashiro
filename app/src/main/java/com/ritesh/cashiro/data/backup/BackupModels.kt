@@ -310,7 +310,9 @@ data class AppPreferences(
     val hasShownReviewPrompt: Boolean,
     
     @SerializedName("last_review_prompt_time")
-    val lastReviewPromptTime: Long?
+    val lastReviewPromptTime: Long?,
+    @SerializedName("bank_account_merges")
+    val bankAccountMerges: Map<String, String>? = null
 )
 
 /**

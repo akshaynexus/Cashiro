@@ -115,6 +115,21 @@ fun ManageAccountsScreen(
     blurEffects: Boolean,
 ) {
     val uiState by manageAccountsViewModel.uiState.collectAsState()
+    val duplicate = com.ritesh.cashiro.data.preferences.BankAccountMergeStore.duplicatePairs(uiState.accounts)
+        .firstOrNull { (source, target) ->
+            "${source.bankName}|${source.currency}|${source.accountLast4}|${target.accountLast4}" !in uiState.dismissedDuplicatePairs &&
+                "${source.bankName}_${source.accountLast4}" !in uiState.hiddenAccounts &&
+                "${target.bankName}_${target.accountLast4}" !in uiState.hiddenAccounts
+        }
+    duplicate?.takeUnless { uiState.isLoading }?.let { (source, target) ->
+        val key = "${source.bankName}|${source.currency}|${source.accountLast4}|${target.accountLast4}"
+        DuplicateAccountDialog(source, target,
+            onMerge = {
+                manageAccountsViewModel.repairDuplicateAccounts(source, target)
+            },
+            onKeepSeparate = { manageAccountsViewModel.dismissDuplicatePair(key) }
+        )
+    }
     val defaultCurrency by manageAccountsViewModel.defaultCurrencyForNewAccounts.collectAsState()
     var showUpdateDialog by remember { mutableStateOf(false) }
     var selectedAccount by remember { mutableStateOf<Pair<String, String>?>(null) }
